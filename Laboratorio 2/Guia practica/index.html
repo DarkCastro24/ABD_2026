@@ -1,0 +1,1045 @@
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta
+      content="width=device-width, minimum-scale=1.0, initial-scale=1.0, user-scalable=yes"
+      name="viewport"
+    />
+    <meta charset="utf-8" />
+    <title>
+      Gestión de usuarios y administración de permisos en SQL Server
+    </title>
+    <!-- Google Fonts and Material Icons -->
+    <link
+      href="https://fonts.googleapis.com/css?family=Roboto:300,400,500,700"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/icon?family=Material+Icons"
+      rel="stylesheet"
+    />
+    <!-- Codelab Styles -->
+    <link
+      href="https://storage.googleapis.com/claat-public/codelab-elements.css"
+      rel="stylesheet"
+    />
+    <link href="styles.css" rel="stylesheet" />
+  </head>
+
+  <body>
+    <google-codelab
+      environment="web"
+      id="lab-sqlserver"
+      title="Gestión de usuarios y administración de permisos en SQL Server"
+    >
+      <!-- Paso 1 -->
+      <google-codelab-step duration="0" label="Introducción">
+        <p>
+          En la administración de bases de datos, una de las tareas
+          fundamentales es gestionar los usuarios y controlar los permisos que
+          poseen sobre los objetos del sistema. Una configuración adecuada
+          garantiza la seguridad, la integridad de los datos y la correcta
+          operación de las aplicaciones que acceden al sistema.
+        </p>
+
+        <p>
+          El objetivo principal es mostrar cómo diferentes
+          <strong>roles</strong> y <strong>usuarios</strong>
+          pueden crearse con funciones específicas, limitando su alcance para
+          aplicar el
+          <strong>principio de mínimo privilegio</strong>. De esta forma, cada
+          cuenta tiene acceso solo a lo que realmente necesita, lo que reduce
+          riesgos de errores y fortalece la seguridad.
+        </p>
+
+        <h3>Principio de mínimo privilegio</h3>
+        <p>
+          La seguridad por mínimo privilegio indica que un usuario o aplicación
+          debe contar únicamente con los permisos necesarios para realizar sus
+          tareas y nada más.
+        </p>
+        <p>Esto disminuye riesgos de:</p>
+        <ul>
+          <li>Accesos no autorizados.</li>
+          <li>Pérdida o corrupción de datos.</li>
+          <li>Escalamiento indebido de privilegios.</li>
+        </ul>
+
+        <p>
+          Para nuestra practica crearemos dos perfiles con funciones bien
+          diferenciadas:
+        </p>
+        <ul>
+          <li>
+            El usuario <strong>orange</strong> (perfil analítico): podrá
+            <strong>solo leer</strong> datos dentro del esquema
+            <strong>dbo</strong>. No tendrá capacidad de insertar, modificar o
+            borrar.
+          </li>
+          <li>
+            El usuario <strong>app_gym</strong> (perfil de aplicación): tendrá
+            permisos de <strong>lectura</strong>, <strong>inserción</strong> y
+            <strong>actualización</strong> en las tablas
+            <strong>dbo.Cliente</strong> y <strong>dbo.Membresia</strong>, pero
+            se le prohibirá explícitamente <strong>borrar</strong> registros y
+            <strong>alterar</strong> el esquema.
+          </li>
+        </ul>
+      </google-codelab-step>
+
+      <!-- Paso 2 -->
+      <google-codelab-step duration="0" label="Prerrequisitos">
+        <p>
+          El primer paso para la práctica es iniciar sesión en
+          <strong>SQL Server Management Studio</strong> con un
+          <strong>usuario</strong> que tenga <strong>permisos</strong> de
+          administrador. En este caso utilizaremos el <strong>usuario</strong>
+          <strong>sa</strong>
+          (System Administrator), que es el administrador por defecto que viene
+          en
+          <strong>SQL Server</strong>.
+        </p>
+
+        <div class="important-box">
+          <p>
+            <strong>Importante:</strong> En caso de no contar con el usuario
+            <strong>sa</strong>, puedes iniciar sesión con
+            <strong>Windows Authentication</strong> y dirigirte hacia abajo en
+            esta misma página
+            <strong>hasta la sección "Obligatorio"</strong> para continuar con
+            la guía. Puedes realizar la práctica, pero podrías llegar a tener
+            problemas por falta de <strong>permisos</strong>.
+          </p>
+        </div>
+
+        <!-- Apartado Opcional 1: Activar el usuario sa -->
+        <h3>
+          Opcional: Cómo activar el usuario <strong>sa</strong> si está
+          deshabilitado
+        </h3>
+        <p>
+          Si al intentar iniciar sesión con SQL Server Authentication utilizando
+          el usuario <strong>sa</strong> recibes un error, es posible que el
+          usuario esté deshabilitado. A continuación se detallan los pasos para
+          activarlo desde <strong>SQL Server Management Studio</strong>:
+        </p>
+
+        <ol>
+          <li>
+            Inicia sesión con un usuario administrador usando
+            <strong>Windows Authentication</strong>.
+          </li>
+          <li>
+            Ve al panel izquierdo: <strong>Security → Logins → sa</strong> y haz
+            clic derecho → <strong>Properties</strong>.
+          </li>
+          <img
+            src="menu_sqlserver.png"
+            alt="menu sql server"
+            style="max-width: 100%; border: 1px solid #ccc; border-radius: 4px"
+          />
+
+          <li>
+            En la pestaña <strong>Status</strong>, asegúrate de seleccionar:
+            <ul>
+              <li>
+                <strong>Permission to connect to database engine:</strong> Grant
+              </li>
+              <li><strong>Login:</strong> Enabled</li>
+            </ul>
+          </li>
+          <img
+            src="activar_sa.png"
+            alt="activar sa desde propiedades"
+            style="max-width: 100%; border: 1px solid #ccc; border-radius: 4px"
+          />
+
+          <li>
+            Ve a la pestaña <strong>General</strong> y asigna una contraseña
+            segura.
+          </li>
+          <li>Haz clic en <strong>OK</strong> para guardar los cambios.</li>
+          <img
+            src="cambiar_clave.png"
+            alt="cambiar clave sa desde propiedades"
+            style="max-width: 100%; border: 1px solid #ccc; border-radius: 4px"
+          />
+        </ol>
+
+        <h3>
+          Opcional: Cómo activar el inicio de sesion por medio de
+          <strong>SQL Server Authentication </strong> si está deshabilitado
+        </h3>
+        <p>
+          Si al intentar iniciar sesión con el usuario "sa" da error es posible
+          que al instalar SQL Server se haya dejado la autenticación de Windows
+          únicamente. A continuación se detallan los pasos para activarlo desde
+          <strong>SQL Server Management Studio</strong>:
+        </p>
+
+        <ol>
+          <li>
+            Conéctate a la instancia de SQL Server usando
+            <strong>Windows Authentication</strong> con un usuario
+            administrador.
+          </li>
+          <li>
+            Haz clic derecho sobre el servidor en el
+            <strong>Object Explorer</strong> → selecciona
+            <strong>Properties</strong>.
+          </li>
+          <img
+            src="menu_activar_autenticacion.png"
+            alt="Propiedades del servidor en SSMS"
+            style="max-width: 100%; border: 1px solid #ccc; border-radius: 4px"
+          />
+
+          <li>
+            En la ventana de propiedades, ve a la pestaña
+            <strong>Security</strong> y selecciona la opción:
+            <ul>
+              <li>
+                <strong>SQL Server and Windows Authentication mode</strong>
+              </li>
+            </ul>
+            Esto habilita el modo mixto (Windows + SQL Server logins).
+          </li>
+          <img
+            src="activar_sqlserverandwindows.png"
+            alt="Habilitar autenticación mixta en SQL Server"
+            style="max-width: 100%; border: 1px solid #ccc; border-radius: 4px"
+          />
+
+          <li>Haz clic en <strong>OK</strong> para guardar los cambios.</li>
+          <li>
+            <strong>Importante:</strong> Reinicia el servicio de SQL Server
+            desde el <strong>Servicios de Windows</strong> para aplicar la nueva
+            configuración.
+          </li>
+          <img
+            src="reiniciar_servicio.png"
+            alt="Reiniciar servicio SQL Server"
+            style="max-width: 100%; border: 1px solid #ccc; border-radius: 4px"
+          />
+        </ol>
+
+        <!-- Apartado Opcional 2: Cambiar nombre del login sa -->
+        <h3>
+          Opcional: Cambiar el nombre del login <strong>sa</strong> por
+          seguridad
+        </h3>
+        <p>
+          Por motivos de seguridad, puedes cambiar el nombre del login
+          <strong>sa</strong> para hacerlo menos predecible y reducir riesgos de
+          ataques por diccionario. Esto no afecta su funcionalidad
+          administrativa, pero es una excelente práctica.
+        </p>
+
+        <p>
+          Ejecuta el siguiente comando en la hoja de consultas puedes colocar el
+          nombre de usuario que desees en lugar de "admin_seguro" solo es
+          importante que lo recuerdes:
+        </p>
+
+        <div class="code-container">
+          <button class="copy-btn" onclick="copyCode(this)">Copiar</button>
+          <pre><code class="language-sql">
+  -- Cambiar nombre del login sa a admin_seguro
+  ALTER LOGIN sa WITH NAME = admin_seguro;
+
+  -- Cambiando la clave del admin desde consulta
+  ALTER LOGIN admin_seguro WITH PASSWORD = 'ClaveSegura$02';
+    </code></pre>
+        </div>
+
+        <div class="important-box">
+          <p>
+            <strong>Importante:</strong> Si cambias el nombre del login
+            <strong>sa</strong>, asegúrate de recordar o anotar el nuevo nombre
+            y la contraseña del usuario administrador, ya que los necesitarás
+            para iniciar sesión.
+          </p>
+        </div>
+
+        <p>
+          Ahora podemos corroborar que el usuario "sa" ya no existe y en su
+          lugar tenemos el nuevo usuario "admin_seguro" ejecutando el siguiente
+          comdando:
+        </p>
+
+        <div class="code-container">
+          <button class="copy-btn" onclick="copyCode(this)">Copiar</button>
+          <pre><code class="language-sql">
+  -- Consultar todos los logins existentes
+  SELECT name, is_disabled
+  FROM sys.server_principals
+  WHERE type_desc = 'SQL_LOGIN';
+    </code></pre>
+        </div>
+
+        <p>
+          Ahora que ya tenemos activado el usuario administrador, iniciamos
+          sesión utilizando el modo de autenticación
+          <strong>SQL Server Authentication</strong> y colocamos las
+          credenciales que asignamos anteriormente:
+        </p>
+        <img
+          src="login_sql.png"
+          alt="login como sa"
+          style="max-width: 100%; border: 1px solid #ccc; border-radius: 4px"
+        />
+
+        <h3>
+          Obligatorio: Crear la base de datos <strong>DB_Gimnasio</strong> con
+          sus tablas e inserciones para continuar con la practica y
+          posteriormente realizar los ejercicios guiados.
+        </h3>
+        <div class="code-container">
+          <button class="copy-btn" onclick="copyCode(this)">Copiar</button>
+          <pre><code class="language-sql">
+    -- Crear la base de datos DB_Gimnasio si no existe
+    IF DB_ID(N'DB_Gimnasio') IS NULL
+    BEGIN
+        PRINT 'Creando base de datos DB_Gimnasio...';
+        CREATE DATABASE DB_Gimnasio;
+    END
+    GO
+
+    -- Crear tablas de la base de datos DB_Gimnasio
+    USE DB_Gimnasio;
+
+    -- Crear tabla Cliente
+    IF OBJECT_ID(N'dbo.Cliente', N'U') IS NULL
+    BEGIN
+        CREATE TABLE dbo.Cliente (
+            id INT IDENTITY(1,1) PRIMARY KEY,
+            nombre NVARCHAR(100) NOT NULL,
+            email  NVARCHAR(100) NULL,
+            fecha_alta DATE NOT NULL DEFAULT (GETDATE())
+        );
+        INSERT INTO dbo.Cliente(nombre,email) 
+        VALUES ('Ana Pérez','ana@fit.com'),('Luis Díaz','luis@fit.com'),('María López','maria@fit.com'); 
+    END
+
+    -- Crear tabla Membresia
+    IF OBJECT_ID(N'dbo.Membresia', N'U') IS NULL
+    BEGIN
+        CREATE TABLE dbo.Membresia (
+            id INT IDENTITY(1,1) PRIMARY KEY,
+            cliente_id INT NOT NULL,
+            plan_membresia NVARCHAR(40) NOT NULL, 
+            fecha_inicio DATE NOT NULL DEFAULT (GETDATE()),
+            fecha_fin    DATE NULL,
+            CONSTRAINT FK_Membresia_Cliente FOREIGN KEY (cliente_id) REFERENCES dbo.Cliente(id)
+        );
+        INSERT INTO dbo.Membresia(cliente_id,plan_membresia,fecha_inicio,fecha_fin) 
+        VALUES (1,'Mensual','2025-08-01',NULL),(2,'Trimestral','2025-07-15','2025-10-14'); 
+    END
+    </code></pre>
+        </div>
+      </google-codelab-step>
+
+      <!-- Paso 3 -->
+      <google-codelab-step duration="0" label="Logins y Usuarios">
+        <h3>
+          Diferencia entre inicio de sesión (Login) y usuario de base de datos
+        </h3>
+        <p>
+          En SQL Server, aunque están relacionados, <strong>login</strong> y
+          <strong>usuario</strong> no son lo mismo:
+        </p>
+        <ul>
+          <li>
+            <strong>Login (inicio de sesión):</strong> Es la credencial de
+            acceso al motor de base de datos. Se crea a nivel de servidor y
+            permite autenticar a una persona o aplicación.<br />
+            <code>CREATE LOGIN orange WITH PASSWORD = 'P@ssw0rd!2025';</code>
+          </li>
+          <li>
+            <strong>Usuario de base de datos:</strong> Es la identidad dentro de
+            una base de datos específica que se asocia a un login.<br />
+            <code>CREATE USER orange FOR LOGIN orange;</code>
+          </li>
+        </ul>
+        <div class="important-box">
+          <em
+            >Nota: Un login puede existir sin tener usuario en una base de
+            datos, pero un usuario siempre necesita estar asociado a un login
+            para poder acceder.</em
+          >
+        </div>
+        <p>
+          A continuación, aprenderemos a crear los <strong>logins</strong> y
+          <strong>usuarios</strong> necesarios para la práctica.
+        </p>
+        <ul>
+          <li>
+            Vamos a crear el <strong>LOGIN</strong> para perfil de analítica
+          </li>
+          <li>
+            Los <strong>LOGIN</strong> se crean en la base de datos "master"
+            debido a que se crean a nivel de servidor.
+          </li>
+        </ul>
+        <div class="code-container">
+          <button class="copy-btn" onclick="copyCode(this)">Copiar</button>
+          <pre><code class="language-sql">
+  -- LOS LOGINS SE CREAN A NIVEL DE SERVIDOR (en la bd master)
+  USE [master]
+  GO
+
+  CREATE LOGIN [orange] 
+  WITH PASSWORD = 'UCA@2025', 
+  CHECK_POLICY = ON,         
+  CHECK_EXPIRATION = ON;  
+          </code></pre>
+        </div>
+        <p>
+          Buenas practicas de seguridad recomendadas al crear
+          <strong>logins</strong>
+        </p>
+        <ul>
+          <li>
+            <strong>WITH PASSWORD</strong> = 'UCA@2025', -- Definimos la
+            contraseña segura
+          </li>
+          <li>
+            <strong>CHECK_POLICY</strong> = ON, -- Aplica políticas de seguridad
+            de Windows (longitud, complejidad, intentos fallidos)
+          </li>
+          <li>
+            <strong>CHECK_EXPIRATION</strong> = ON; -- La contraseña expira
+            según política de Windows
+          </li>
+        </ul>
+        <div class="important-box">
+          <p>
+            <strong>Importante: </strong>Este <strong>login</strong> orange está
+            pensado para el <strong>rol</strong> analítica, es decir un
+            <strong>usuario</strong> que solo leerá datos sin modificarlos.
+          </p>
+        </div>
+        <p>
+          Crear <strong>usuario</strong> en la base de datos DB_Gimnasio para el
+          <strong>login</strong> orange
+        </p>
+        <div class="code-container">
+          <button class="copy-btn" onclick="copyCode(this)">Copiar</button>
+  -- Nos conectamos a la base de datos donde asignaremos el usuario
+  USE DB_Gimnasio;
+
+  -- Creamos el usuario orange asignando el login orange
+  CREATE USER [orange] FOR LOGIN [orange];
+        </div>
+
+        <div class="important-box">
+          <p>
+            Ahora el <strong>login</strong> orange ya puede acceder a
+            DB_Gimnasio como <strong>usuario</strong> orange
+          </p>
+        </div>
+        <p>
+          Ahora vamos a crear un <strong>LOGIN</strong> para la aplicación
+          app_gym
+        </p>
+        <div class="code-container">
+          <button class="copy-btn" onclick="copyCode(this)">Copiar</button>
+          <pre><code class="language-sql">
+  USE [master];
+
+  -- Creamos el login para app_gym
+  CREATE LOGIN [app_gym] 
+  WITH PASSWORD = 'UCA@2025',
+  CHECK_EXPIRATION = OFF, 
+  CHECK_POLICY = ON;
+          </code></pre>
+        </div>
+        <p>
+          Ahora vamos a crear el <strong>usuario</strong> app_gym en la base de
+          datos DB_Gimnasio
+        </p>
+        <div class="code-container">
+          <button class="copy-btn" onclick="copyCode(this)">Copiar</button>
+          <pre><code class="language-sql">
+  USE DB_Gimnasio;
+
+  -- Creamos el usuario app_gym con el login app_gym
+  CREATE USER [app_gym] FOR LOGIN [app_gym];
+          </code></pre>
+        
+      </google-codelab-step>
+
+      <!-- Paso 4 -->
+      <google-codelab-step duration="0" label="Roles y Permisos">
+        <h3>Roles en SQL Server</h3>
+        <p>
+          En lugar de asignar permisos directamente a cada usuario,
+          <strong>SQL Server</strong> recomienda el uso de
+          <strong>roles</strong>. Un rol es un contenedor de permisos que
+          facilita la administración:
+        </p>
+        <ul>
+          <li>
+            <strong>Roles de servidor:</strong> Definen permisos globales (ej.
+            <code>sysadmin</code>).
+          </li>
+          <li>
+            <strong>Roles de base de datos:</strong> Controlan permisos dentro
+            de una base de datos específica.
+          </li>
+        </ul>
+        <p>Ejemplos:</p>
+        <ul>
+          <li>
+            Un rol de solo lectura que permite ejecutar únicamente consultas
+            <code>SELECT</code>.
+          </li>
+          <li>
+            Un rol de aplicación que permite leer, insertar y actualizar en
+            tablas concretas, pero niega <code>DELETE</code> o
+            <code>ALTER</code>.
+          </li>
+        </ul>
+
+        <div class="important-box">
+          <strong>Importante:</strong> En <strong>SQL Server</strong>, una buena
+          práctica consiste en utilizar <strong>roles</strong> como grupos de
+          <strong>permisos</strong>, los cuales luego se asignan a los
+          <strong>usuarios</strong>.
+        </div>
+
+        <!-- Crear rol de lectura -->
+        <div class="code-container">
+          <button class="copy-btn" onclick="copyCode(this)">Copiar</button>
+          <pre><code class="language-sql">
+  USE DB_Gimnasio;
+
+  -- Creamos rol "db_lectura" 
+  CREATE ROLE db_lectura;
+</code></pre>
+        </div>
+  
+        <!-- Administración de permisos -->
+        <h3>Administración de permisos</h3>
+        <p>
+          Los permisos en <strong>SQL Server</strong> se administran con tres
+          comandos clave:
+        </p>
+        <ul>
+          <li>
+            <strong>GRANT:</strong> Concede permisos (ej.
+            <code>GRANT SELECT</code>).
+          </li>
+          <li>
+            <strong>DENY:</strong> Niega permisos explícitamente, aunque estén
+            concedidos en un rol.
+          </li>
+          <li>
+            <strong>REVOKE:</strong> Revoca permisos previamente otorgados o
+            denegados.
+          </li>
+        </ul>
+        <p>
+          Un diseño seguro incluye defensa en profundidad, combinando permisos
+          mínimos con denegaciones explícitas de operaciones peligrosas.
+        </p>
+
+        <div class="code-container">
+          <button class="copy-btn" onclick="copyCode(this)">Copiar</button>
+          <pre><code class="language-sql">
+-- Otorgamos permiso de SELECT (solo lectura) sobre TODO el esquema dbo (donde estan nuestras tablas)
+GRANT SELECT ON SCHEMA::dbo TO db_lectura;
+
+-- Importante al usuario "orange" le asignamos el rol "db_lectura" 
+EXEC sp_addrolemember 'db_lectura', 'orange'; -- primero rol, luego usuario
+GO
+</code></pre>
+        </div>
+
+        <!-- Crear rol de aplicación -->
+        <h3>Rol para la aplicación "db_app"</h3>
+        <p>
+          Ahora crearemos un <strong>rol</strong> para la aplicación
+          <code>app_gym</code>, el cual tendrá más
+          <strong>permisos</strong> (leer, insertar y actualizar).
+        </p>
+
+        <div class="code-container">
+          <button class="copy-btn" onclick="copyCode(this)">Copiar</button>
+          <pre><code class="language-sql">
+  -- Creando el rol para db_app
+  CREATE ROLE db_app;
+</code></pre>
+        </div>
+
+  <p>Asignandole los permisos especificos al rol "db_app"</p>
+        <div class="code-container">
+          <button class="copy-btn" onclick="copyCode(this)">Copiar</button>
+          <pre><code class="language-sql">
+  -- Otorgamos permisos específicos sobre las tablas de interés
+  GRANT SELECT, INSERT, UPDATE ON dbo.Cliente   TO db_app;
+  GRANT SELECT, INSERT, UPDATE ON dbo.Membresia TO db_app;
+
+  -- Asignamos al usuario "app_gym" el rol "db_app"
+  EXEC sp_addrolemember 'db_app','app_gym';
+  GO
+        </code></pre>
+        </div>
+
+        <div class="important-box">
+          <p>
+            <strong>Importante: </strong>El usuario <code>app_gym</code> ahora
+            puede leer, insertar y actualizar en las tablas
+            <code>Cliente</code> y <code>Membresia</code>, pero no puede borrar
+            registros ni alterar la estructura de las tablas.
+          </p>
+        </div>
+
+        <!-- Denegación explícita -->
+        <h3>Denegar acciones peligrosas</h3>
+        <p>
+          Incluso si un <strong>rol</strong> o <strong>usuario</strong> llegara
+          a tener <strong>permisos</strong> más amplios en el futuro, podemos
+          blindar ciertas acciones con el comando <code>DENY</code>.
+        </p>
+
+        <div class="code-container">
+          <button class="copy-btn" onclick="copyCode(this)">Copiar</button>
+          <pre><code class="language-sql">
+-- Negamos la posibilidad de borrar registros en la tabla Cliente
+DENY DELETE ON dbo.Cliente TO db_app;
+
+-- Negamos la posibilidad de alterar el esquema dbo (alter table, drop table, etc.)
+DENY ALTER ON SCHEMA::dbo TO db_app;
+GO
+</code></pre>
+        </div>
+      </google-codelab-step>
+
+      <!-- Paso 5 -->
+      <google-codelab-step duration="0" label="Comprobación de permisos">
+        <p>En este paso se validan los permisos de los usuarios creados. Se comprueba que app_gym no pueda borrar clientes pero sí insertar y actualizar, y que orange solo tenga acceso de lectura. 
+          Para ello se usa EXECUTE AS USER que simula que estuvieramos ejecutando los comandos con ese usuario específico.</p>
+        <div class="important-box">
+          <strong>Importante:</strong> ¿Sera que el usuario app_gym puede borrar
+          clientes?
+        </div>
+
+        <div class="code-container">
+          <button class="copy-btn" onclick="copyCode(this)">Copiar</button>
+          <pre><code class="language-sql">-- Probar que app_gym NO puede borrar clientes
+USE DB_Gimnasio;
+
+-- Ejecutamos las sentencias como app_gym
+EXECUTE AS USER = 'app_gym';
+
+-- Intentamos borrar un cliente (Deberia fallar porque no tiene permiso)
+DELETE FROM dbo.Cliente WHERE id = 1;
+
+-- Regresamos al contexto original 
+REVERT;
+GO
+</code></pre>
+        </div>
+        <p>Probar que app_gym sí puede insertar y actualizar</p>
+        <div class="code-container">
+          <button class="copy-btn" onclick="copyCode(this)">Copiar</button>
+          <pre><code class="language-sql">-- Ejecutamos la sentencia como el usuario app_gym
+EXECUTE AS USER = 'app_gym';
+
+-- Insertamos un nuevo cliente (Debe funcionar)
+INSERT INTO dbo.Cliente (nombre, email)
+VALUES (N'James Humberstone', N'james@gmail.com');
+
+SELECT * FROM dbo.Cliente WHERE email = 'james@gmail.com';
+
+-- Guardamos el id del ultimo cliente ingresado (Debe funcionar)
+DECLARE @ultimoID INT = (SELECT max(id) FROM dbo.Cliente);
+
+UPDATE dbo.Cliente
+SET email = N'james@uca.edu.sv'
+WHERE id = @ultimoID;
+
+-- Comprobamos se actualizo el correo del cliente
+SELECT * FROM dbo.Cliente WHERE email = 'james@uca.edu.sv';
+
+-- Regresamos al contexto original (Obligatorio para cambiar de usuario)
+REVERT;
+GO
+
+-- Opcional: Comprobamos que regresamos al contexto original 
+SELECT USER_NAME() AS UsuarioDBActual, ORIGINAL_LOGIN() AS LoginOriginal;
+</code></pre>
+        </div>
+        <div class="important-box">
+          <p>
+            <strong>Importante: </strong>UsuarioDBActual deberia ser
+            <strong>dbo</strong> y no app_gym
+          </p>
+        </div>
+        <p>¿Sera que orange tiene solo lectura en esquema dbo?</p>
+        <div class="code-container">
+          <button class="copy-btn" onclick="copyCode(this)">Copiar</button>
+          <pre><code class="language-sql">--- Probar que orange solo puede leer (UN INSERT debe FALLAR) 
+EXECUTE AS USER = 'orange';
+
+-- Lectura permitida: debe funcionar en las tablas Cliente y Membresia 
+SELECT TOP(1) * FROM dbo.Cliente;
+SELECT TOP(1) * FROM dbo.Membresia;
+
+-- Intentamos insertar (debe fallar)
+INSERT INTO dbo.Cliente (nombre) VALUES (N'Eduardo Castro');
+
+-- Regresamos al contexto original (Usuario con el que iniciamos sesion)
+REVERT;
+GO
+</code></pre>
+        </div>
+        <div class="important-box">
+          <p>
+            <strong>Importante:</strong> Tambien podemos consultar los
+            <strong>permisos</strong> efectivos de un <strong>usuario</strong>
+          </p>
+        </div>
+        <p>
+          Para verificar los permisos de un usuario se pueden usar mecanismos
+          como:
+        </p>
+        <ul>
+          <li>
+            <code>EXECUTE AS USER</code>: simula que se está operando como un
+            usuario específico.
+          </li>
+          <li>
+            <code>fn_my_permissions</code>: muestra los permisos efectivos que
+            un usuario posee en un contexto determinado.
+          </li>
+        </ul>
+        <div class="code-container">
+          <button class="copy-btn" onclick="copyCode(this)">Copiar</button>
+          <pre><code class="language-sql">-- Primero verificamos con que usuario estamos activos en la base de datos 
+SELECT USER_NAME() AS UsuarioDBActual, ORIGINAL_LOGIN() AS LoginOriginal;
+
+-- Consultamos los permisos del usuario db actual en la base DB_Gimnasio
+SELECT * 
+FROM fn_my_permissions(NULL,'DATABASE');
+GO
+
+-- Podemos hacer la prueba con el otro usuario creado 
+EXECUTE AS USER = 'app_gym';
+
+-- Consultamos los permisos del usuario app_gym en la base DB_Gimnasio
+SELECT * 
+FROM fn_my_permissions(NULL,'DATABASE');
+GO
+</code></pre>
+        </div>
+      </google-codelab-step>
+      <!-- Paso 6 -->
+      <google-codelab-step duration="0" label="Buenas prácticas">
+        <h3>
+          A continuación, se presentan algunos ejemplos de
+          <strong>buenas prácticas</strong> al crear <strong>logins</strong> y
+          <strong>usuarios</strong> en
+          <strong>SQL Server</strong>
+        </h3>
+
+        <!-- 1. Contraseñas seguras -->
+        <p>
+          <strong>1. Contraseñas seguras y políticas de seguridad</strong><br />
+          Se deben usar contraseñas complejas y habilitar políticas de seguridad
+          de Windows para garantizar longitud, complejidad y bloqueo por
+          intentos fallidos. Esto evita accesos no autorizados.
+        </p>
+
+        <ul>
+          <li><strong>Longitud mínima:</strong> Al menos 8 caracteres.</li>
+          <li>
+            <strong>Complejidad:</strong> Debe incluir mayúsculas, minúsculas,
+            números y caracteres especiales.
+          </li>
+          <li>
+            <strong>Expiración:</strong> Las contraseñas deben caducar
+            periódicamente.
+          </li>
+          <li>
+            <strong>Bloqueo:</strong> Tras varios intentos fallidos la cuenta se
+            bloquea temporalmente.
+          </li>
+          <li>
+            <strong>No reutilización:</strong> Evitar que un usuario repita sus
+            últimas contraseñas.
+          </li>
+        </ul>
+
+        <div class="code-container">
+          <button class="copy-btn" onclick="copyCode(this)">Copiar</button>
+          <pre><code class="language-sql">CREATE LOGIN usuario_seguro 
+WITH PASSWORD = 'ClaveS3gura@2025!',  -- Cumple complejidad
+     CHECK_POLICY = ON;               -- Activa políticas de seguridad
+GO
+</code></pre>
+        </div>
+
+        <!-- 2. Rotación de contraseñas -->
+        <p>
+          <strong>2. Rotación de contraseñas</strong><br />
+          Consiste en obligar a los usuarios a cambiar su contraseña después de
+          cierto tiempo. Así se reduce el riesgo de que credenciales antiguas se
+          usen indebidamente.
+        </p>
+
+        <div class="code-container">
+          <button class="copy-btn" onclick="copyCode(this)">Copiar</button>
+          <pre><code class="language-sql">CREATE LOGIN usuario_rotacion
+WITH PASSWORD = 'R0taci0n$2025',
+     CHECK_POLICY = ON,          
+     CHECK_EXPIRATION = ON;      -- Expira la contraseña automáticamente
+GO
+</code></pre>
+        </div>
+
+        <!-- 3. Principio de menor privilegio -->
+        <p>
+          <strong>3. Principio de menor privilegio</strong><br />
+          Cada usuario debe tener solo los permisos estrictamente necesarios.
+          Ejemplo: un lector puede consultar, pero no modificar datos.
+        </p>
+
+        <div class="code-container">
+          <button class="copy-btn" onclick="copyCode(this)">Copiar</button>
+          <pre><code class="language-sql">-- Crear usuario desde un login existente
+CREATE USER lector FOR LOGIN usuario_seguro;
+
+-- Dar permisos solo de lectura sobre la tabla Cliente
+GRANT SELECT ON dbo.Cliente TO lector;
+</code></pre>
+        </div>
+
+        <!-- 4. Uso de roles -->
+        <p>
+          <strong
+            >4. Uso de roles en lugar de asignar permisos individuales</strong
+          ><br />
+          Centralizar permisos en roles facilita la administración y evita
+          inconsistencias.
+        </p>
+
+        <div class="code-container">
+          <button class="copy-btn" onclick="copyCode(this)">Copiar</button>
+          <pre><code class="language-sql">-- Crear rol de solo lectura
+CREATE ROLE soloLectura;
+
+-- Asignar permisos de lectura en todo el esquema dbo
+GRANT SELECT ON SCHEMA::dbo TO soloLectura;
+
+-- Agregar usuario al rol
+EXEC sp_addrolemember 'soloLectura', 'lector';
+</code></pre>
+        </div>
+
+        <!-- 5. Defensa en profundidad -->
+        <p>
+          <strong>5. Defensa en profundidad</strong><br />
+          Consiste en aplicar múltiples capas de seguridad: permisos mínimos +
+          denegaciones explícitas.
+        </p>
+
+        <div class="code-container">
+          <button class="copy-btn" onclick="copyCode(this)">Copiar</button>
+          <pre><code class="language-sql">-- Crear rol de aplicación
+CREATE ROLE appSeguro;
+
+-- Permisos mínimos para Cliente
+GRANT SELECT, INSERT, UPDATE ON dbo.Cliente TO appSeguro;
+
+-- Negar explícitamente operaciones peligrosas
+DENY DELETE ON dbo.Cliente TO appSeguro;
+DENY ALTER ON SCHEMA::dbo TO appSeguro;
+</code></pre>
+        </div>
+
+        <!-- 6. Supervisión de cuentas privilegiadas -->
+        <p>
+          <strong>6. Supervisión de cuentas privilegiadas</strong><br />
+          El rol <code>sysadmin</code> debe reservarse solo para DBAs. Nunca se
+          debe usar <code>sa</code> o <code>sysadmin</code> en conexiones de
+          aplicaciones.
+        </p>
+
+        <div class="code-container">
+          <button class="copy-btn" onclick="copyCode(this)">Copiar</button>
+          <pre><code class="language-sql">-- Crear login de administrador seguro
+CREATE LOGIN admin_seguro 
+WITH PASSWORD = 'Adm1n$eguro@2025',
+     CHECK_POLICY = ON;
+
+-- Asignarle rol sysadmin SOLO si es estrictamente necesario
+ALTER SERVER ROLE sysadmin ADD MEMBER admin_seguro;
+</code></pre>
+        </div>
+
+        <!-- 7. Auditoría y monitoreo -->
+        <p>
+          <strong>7. Auditoría y monitoreo</strong><br />
+          Es importante registrar accesos, inicios fallidos y revisar
+          periódicamente los roles asignados.
+        </p>
+
+        <div class="code-container">
+          <button class="copy-btn" onclick="copyCode(this)">Copiar</button>
+          <pre><code class="language-sql">-- Ver fallos de inicio de sesión en el log de SQL Server
+EXEC xp_readerrorlog 0, 1, 'Login failed';
+
+-- Consultar permisos actuales de un usuario
+SELECT * 
+FROM fn_my_permissions(NULL, 'DATABASE')
+WHERE grantee_principal_id = USER_ID('lector');
+</code></pre>
+        </div>
+      </google-codelab-step>
+
+      <!-- Paso 7 -->
+      <google-codelab-step duration="0" label="Limpieza (opcional)">
+        <p>
+          A continuación, se presenta un script completo para eliminar los
+          <strong>logins</strong>, <strong>usuarios</strong>,
+          <strong>roles</strong> y tablas creadas durante la práctica.
+        </p>
+
+        <div class="code-container">
+          <button class="copy-btn" onclick="copyCode(this)">Copiar</button>
+          <pre><code class="language-sql">
+  USE DB_Gimnasio;
+
+  -- Revocar permisos para los roles
+  IF EXISTS (SELECT 1 FROM sys.database_principals WHERE name = N'db_lectura')
+      REVOKE SELECT ON SCHEMA::dbo FROM db_lectura;
+
+  IF EXISTS (SELECT 1 FROM sys.database_principals WHERE name = N'db_app')
+  BEGIN
+      REVOKE SELECT, INSERT, UPDATE ON dbo.Cliente   FROM db_app;
+      REVOKE SELECT, INSERT, UPDATE ON dbo.Membresia FROM db_app;
+      DENY DELETE ON dbo.Cliente TO db_app;
+      DENY ALTER  ON SCHEMA::dbo TO db_app;
+  END
+
+  IF EXISTS (SELECT 1 FROM sys.database_principals WHERE name = N'reportes')
+  BEGIN
+      REVOKE SELECT ON SCHEMA::dbo FROM reportes;
+      DENY ALTER ON SCHEMA::dbo TO reportes;
+  END
+
+  -- Borrar usuarios 
+  DROP USER IF EXISTS orange;
+  DROP USER IF EXISTS analista;
+  DROP USER IF EXISTS app_gym;
+
+  -- Borrar roles 
+  DROP ROLE IF EXISTS db_lectura;
+  DROP ROLE IF EXISTS db_app;
+  DROP ROLE IF EXISTS reportes;
+
+  -- Borrar tablas de práctica (si existen)
+  DROP TABLE IF EXISTS dbo.Membresia;
+  DROP TABLE IF EXISTS dbo.Cliente;
+  DROP TABLE IF EXISTS dbo.Trabajador;
+
+  -- Borrar logins a nivel servidor 
+  USE [master];
+
+  IF EXISTS (SELECT 1 FROM sys.server_principals WHERE name = N'orange')
+      DROP LOGIN orange;
+
+  IF EXISTS (SELECT 1 FROM sys.server_principals WHERE name = N'app_gym')
+      DROP LOGIN app_gym;
+
+  IF EXISTS (SELECT 1 FROM sys.server_principals WHERE name = N'analista')
+      DROP LOGIN analista;
+  GO
+</code></pre>
+        </div>
+      </google-codelab-step>
+
+      <!-- Paso 8 -->
+      <google-codelab-step duration="0" label="Ejercicio Propuesto">
+        <p>
+          Como parte de este laboratorio, cada estudiante deberá realizar uno de
+          los
+          <strong>ejercicios prácticos</strong> disponibles en el documento
+          entregado por el instructor.
+        </p>
+        <p>
+          Estos ejercicios están diseñados para aplicar los conocimientos
+          aprendidos sobre
+          <strong>gestión de usuarios, roles y permisos</strong> en
+          <strong>SQL Server</strong>.
+        </p>
+        <p>
+          Es importante que sigas cuidadosamente las
+          <strong>instrucciones del instructor encargado</strong> y documentes
+          tu código para facilitar su revisión.
+        </p>
+        <div class="important-box">
+          <p>
+            <strong>Importante:</strong> Este ejercicio forma parte de la
+            evaluación práctica del laboratorio.
+          </p>
+        </div>
+      </google-codelab-step>
+
+      <!-- Paso 9 -->
+      <google-codelab-step duration="0" label="Créditos" step="9">
+        <p>
+          Departamento de Electrónica e Informática, Universidad Centroamericana
+          José Simeón Cañas, La Libertad, El Salvador.
+        </p>
+        <p><strong>Versión de este documento:</strong> Versión 1, 2025.</p>
+        <table>
+          <tbody>
+            <tr>
+              <td><strong>Versión</strong></td>
+              <td><strong>Autores</strong></td>
+            </tr>
+            <tr>
+              <td>1</td>
+              <td>
+                Diego Eduardo Castro Quintanilla (00117322@uca.edu.sv), Claudia
+                Maria Chavez Grande (00037221@uca.edu.sv)
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <p>
+          <img
+            alt="license"
+            src="https://licensebuttons.net/l/by-nc-sa/4.0/88x31.png"
+          /><br />
+          This work is licensed under a
+          <a
+            href="http://creativecommons.org/licenses/by-nc-sa/4.0/"
+            target="_blank"
+          >
+            Creative Commons Attribution-NonCommercial-ShareAlike 4.0
+            International License </a
+          >.
+        </p>
+      </google-codelab-step>
+    </google-codelab>
+    <!-- Codelab Scripts -->
+    <script src="https://storage.googleapis.com/claat-public/native-shim.js"></script>
+    <script src="https://storage.googleapis.com/claat-public/custom-elements.min.js"></script>
+    <script src="https://storage.googleapis.com/claat-public/prettify.js"></script>
+    <script src="https://storage.googleapis.com/claat-public/codelab-elements.js"></script>
+    <script>
+      function copyCode(btn) {
+        const code = btn.nextElementSibling.innerText;
+        navigator.clipboard.writeText(code).then(() => {
+          btn.innerText = "Copiado!";
+          setTimeout(() => (btn.innerText = "Copiar"), 2000);
+        });
+      }
+    </script>
+  </body>
+</html>
