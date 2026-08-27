@@ -34,11 +34,12 @@
 
       <!-- Introducción -->
       <google-codelab-step label="Introducción a Window Functions" duration="0">
-        <p><b>Objetivos de la practica:</b></p>
+        <p><b>Objetivos de la práctica:</b></p>
         <ul>
-          <li>Entender y aplicar funciones ventana para analizar datos sin perder el detalle de cada fila.</li>
-          <li>Organizar consultas con CTE y transformar reportes con <code>PIVOT</code> y <code>UNPIVOT</code>.</li>
-          <li>Resolver ejercicios básicos e intermedios sobre <code>AdventureWorks2022</code>.</li>
+          <li>Comprender y aplicar funciones ventana para analizar datos sin perder el detalle de cada fila.</li>
+          <li>Resolver rankings, acumulados y comparaciones entre filas con consultas de complejidad baja a intermedia.</li>
+          <li>Reconocer CTE, <code>PIVOT</code> y <code>UNPIVOT</code> como herramientas de apoyo para organizar y presentar resultados.</li>
+          <li>Practicar los conceptos sobre la base de datos <code>AdventureWorks2022</code>.</li>
         </ul>
         <p><b>¿Qué son las Window Functions?</b></p>
         <p>Las Window Functions realizan cálculos sobre filas relacionadas con la fila actual, sin agrupar el resultado como lo hace <code>GROUP BY</code>. Así conservan el contexto de cada registro.</p>
@@ -50,24 +51,26 @@
       <!-- Introducción temática -->
       <google-codelab-step label="¿Cuándo usar cada temática?" duration="0">
         <p>Los temas de esta guía complementan lo aprendido sobre funciones de agregación, <code>GROUP BY</code>, <code>HAVING</code> y subconsultas.</p>
-        <p><strong>Funciones ventana:</strong> úsalas cuando necesitas calcular un promedio, total, ranking o comparación por grupo, pero quieres seguir viendo cada fila. A diferencia de <code>GROUP BY</code>, no reducen el resultado a una fila por grupo.</p>
-        <p><strong>CTE:</strong> úsalo cuando una consulta o subconsulta es difícil de leer. El CTE le da nombre a un resultado temporal y permite dividir la solución en pasos claros. No crea una tabla permanente.</p>
-        <p><strong>PIVOT:</strong> úsalo cuando los datos están en filas, pero el reporte debe mostrar categorías, meses o años como columnas. <code>UNPIVOT</code> hace el proceso contrario.</p>
-        <div class="important-box"><strong>En resumen:</strong> funciones ventana analizan sin perder filas; CTE organiza la consulta; PIVOT cambia la forma del resultado.</div>
+        <p><strong>Con <code>GROUP BY</code></strong>, varias filas se convierten en una sola por grupo. Es la opción correcta cuando únicamente se necesita un resumen, por ejemplo, una fila con el total de ventas de cada año.</p>
+        <p><strong>Con una función ventana</strong>, el total, promedio, posición o valor anterior se agrega como una nueva columna y las filas originales continúan visibles. Es la herramienta principal de esta práctica.</p>
+        <p><strong>Con una subconsulta</strong> también pueden resolverse cálculos por etapas, pero la consulta puede volverse difícil de leer. Un <strong>CTE</strong> permite asignar un nombre a una etapa temporal y reutilizar sus columnas en la sentencia siguiente.</p>
+        <p><strong><code>PIVOT</code> y <code>UNPIVOT</code></strong> no cambian el análisis: cambian la forma de presentar los datos. <code>PIVOT</code> convierte categorías de filas en columnas y <code>UNPIVOT</code> realiza el proceso contrario.</p>
+        <div class="important-box"><strong>Pregunta guía:</strong> si necesitas un cálculo por grupo sin ocultar el detalle, piensa primero en una <strong>función ventana</strong>. Usa CTE para ordenar la solución y PIVOT/UNPIVOT solo cuando el formato del reporte lo requiera.</div>
       </google-codelab-step>
 
       <!-- Fundamentos fusionados -->
       <google-codelab-step label="Funciones ventana: fundamentos" duration="0">
-        <p>La función se escribe antes de <code>OVER()</code>. Dentro de <code>OVER()</code>, <code>PARTITION BY</code> crea grupos y <code>ORDER BY</code> define el orden interno.</p>
+        <p>Una función ventana calcula un valor para cada fila usando otras filas relacionadas. Para construirla, primero se elige la función y luego se define su ventana con <code>OVER()</code>.</p>
+        <p>Dentro de <code>OVER()</code> se toman dos decisiones: <code>PARTITION BY</code> indica dónde se reinicia el cálculo y <code>ORDER BY</code> establece la secuencia. No todas las funciones necesitan ambas cláusulas.</p>
         <table>
           <thead><tr><th>Comando/Función</th><th>Descripción</th><th>Ejemplo</th></tr></thead>
           <tbody>
-            <tr><td><code>OVER()</code></td><td>Indica que el cálculo se realizará como ventana.</td><td><code>AVG(ListPrice) OVER()</code></td></tr>
-            <tr><td><code>PARTITION BY</code></td><td>Divide las filas en grupos y reinicia el cálculo en cada grupo.</td><td><code>AVG(ListPrice) OVER (PARTITION BY ProductSubcategoryID)</code></td></tr>
-            <tr><td><code>ORDER BY</code></td><td>Establece el orden para rankings, acumulados y comparaciones.</td><td><code>RANK() OVER (ORDER BY ListPrice DESC)</code></td></tr>
+            <tr><td><code>OVER()</code></td><td>Convierte el cálculo en una función ventana. Si está vacío, usa todas las filas del resultado.</td><td><code>AVG(ListPrice) OVER()</code></td></tr>
+            <tr><td><code>PARTITION BY</code></td><td>Forma grupos lógicos sin reducir las filas y reinicia el cálculo en cada grupo.</td><td><code>COUNT(*) OVER (PARTITION BY ProductSubcategoryID)</code></td></tr>
+            <tr><td><code>ORDER BY</code></td><td>Define el orden dentro de la ventana. Es indispensable para rankings, acumulados y desplazamientos.</td><td><code>RANK() OVER (ORDER BY ListPrice DESC)</code></td></tr>
           </tbody>
         </table>
-        <p><strong>Ejemplo:</strong></p>
+        <h3>Ejemplo 1 (básico): conservar el detalle y mostrar el promedio del grupo</h3>
         <div class="code-container"><button class="copy-btn" onclick="copyCode(this)">Copiar</button><pre><code class="language-sql">
 SELECT ProductID, Name, ProductSubcategoryID, ListPrice,
        AVG(ListPrice) OVER (
@@ -81,33 +84,78 @@ WHERE ListPrice &gt; 0;
           <li>La partición forma una ventana por subcategoría.</li>
           <li>No se usa <code>GROUP BY</code>, por lo que cada producto permanece visible.</li>
         </ul>
+        <h3>Ejemplo 2 (básico): comparar una ventana general con una particionada</h3>
+        <div class="code-container"><button class="copy-btn" onclick="copyCode(this)">Copiar</button><pre><code class="language-sql">
+SELECT ProductID, Name, ProductSubcategoryID, ListPrice,
+       AVG(ListPrice) OVER () AS promedio_general,
+       COUNT(*) OVER (
+           PARTITION BY ProductSubcategoryID
+       ) AS productos_en_subcategoria
+FROM Production.Product
+WHERE ListPrice &gt; 0
+  AND ProductSubcategoryID IS NOT NULL;
+</code></pre></div>
+        <p><code>OVER()</code> calcula un único promedio general y lo repite en cada fila. La segunda ventana se reinicia por subcategoría y cuenta cuántos productos contiene cada una.</p>
+        <div class="important-box"><strong>Tip:</strong> comienza con <code>OVER()</code> y agrega <code>PARTITION BY</code> solamente cuando el cálculo deba reiniciarse por cliente, vendedor, territorio o categoría.</div>
       </google-codelab-step>
 
       <!-- Agregación -->
       <google-codelab-step label="Funciones ventana: agregación" duration="0">
-        <p>Permiten mostrar estadísticas del grupo junto a cada fila. Son útiles para comparar un valor individual con el total, promedio o extremo de su categoría.</p>
+        <p>Las funciones de agregación también pueden utilizarse como ventanas. A diferencia de una agregación con <code>GROUP BY</code>, el resultado del grupo se muestra junto a cada registro.</p>
+        <p>Son útiles para comparar un valor individual con su promedio, calcular el aporte porcentual de cada grupo o construir acumulados siguiendo un orden.</p>
         <table>
           <thead><tr><th>Comando/Función</th><th>Descripción</th><th>Ejemplo</th></tr></thead>
           <tbody>
-            <tr><td><code>SUM() OVER()</code></td><td>Total por partición o total acumulado.</td><td><code>SUM(TotalDue) OVER (PARTITION BY TerritoryID)</code></td></tr>
+            <tr><td><code>SUM() OVER()</code></td><td>Total por partición. Si incluye un orden y un marco, puede producir un acumulado.</td><td><code>SUM(TotalDue) OVER (PARTITION BY TerritoryID)</code></td></tr>
             <tr><td><code>AVG() OVER()</code></td><td>Promedio del grupo sin ocultar filas.</td><td><code>AVG(ListPrice) OVER (PARTITION BY ProductSubcategoryID)</code></td></tr>
             <tr><td><code>MIN()/MAX() OVER()</code></td><td>Menor y mayor valor de la partición.</td><td><code>MAX(ListPrice) OVER (PARTITION BY ProductSubcategoryID)</code></td></tr>
             <tr><td><code>COUNT() OVER()</code></td><td>Cantidad de filas en la partición.</td><td><code>COUNT(*) OVER (PARTITION BY CustomerID)</code></td></tr>
           </tbody>
         </table>
+        <h3>Ejemplo 1 (básico): mínimo, máximo y promedio de cada subcategoría</h3>
         <div class="code-container"><button class="copy-btn" onclick="copyCode(this)">Copiar</button><pre><code class="language-sql">
-SELECT Name, ListPrice,
+SELECT Name, ProductSubcategoryID, ListPrice,
        MIN(ListPrice) OVER (PARTITION BY ProductSubcategoryID) AS minimo,
-       MAX(ListPrice) OVER (PARTITION BY ProductSubcategoryID) AS maximo
+       MAX(ListPrice) OVER (PARTITION BY ProductSubcategoryID) AS maximo,
+       AVG(ListPrice) OVER (PARTITION BY ProductSubcategoryID) AS promedio
 FROM Production.Product
-WHERE ListPrice &gt; 0;
+WHERE ListPrice &gt; 0
+  AND ProductSubcategoryID IS NOT NULL;
 </code></pre></div>
-        <p><strong>Tip:</strong> si el cálculo debe reiniciarse por cliente, vendedor o territorio, cambia la columna de <code>PARTITION BY</code>.</p>
+        <p>Las tres funciones usan la misma partición. Cada producto se puede comparar inmediatamente con los límites y el promedio de su propia subcategoría.</p>
+
+        <h3>Ejemplo 2 (intermedio): combinar <code>GROUP BY</code> con una función ventana</h3>
+        <div class="code-container"><button class="copy-btn" onclick="copyCode(this)">Copiar</button><pre><code class="language-sql">
+SELECT SalesPersonID,
+       YEAR(OrderDate) AS anio,
+       SUM(TotalDue) AS ventas_anuales,
+       SUM(SUM(TotalDue)) OVER (
+           PARTITION BY SalesPersonID
+       ) AS ventas_del_vendedor,
+       CAST(
+           100.0 * SUM(TotalDue) /
+           NULLIF(SUM(SUM(TotalDue)) OVER (
+               PARTITION BY SalesPersonID
+           ), 0)
+           AS decimal(5,2)
+       ) AS porcentaje_del_total
+FROM Sales.SalesOrderHeader
+WHERE SalesPersonID IS NOT NULL
+GROUP BY SalesPersonID, YEAR(OrderDate)
+ORDER BY SalesPersonID, anio;
+</code></pre></div>
+        <ul>
+          <li>El <code>SUM(TotalDue)</code> interno obtiene las ventas de cada vendedor por año.</li>
+          <li>El <code>SUM(...) OVER</code> externo suma esos resultados anuales sin eliminar las filas de cada año.</li>
+          <li><code>NULLIF(..., 0)</code> evita una división entre cero al calcular el porcentaje.</li>
+        </ul>
+        <div class="important-box"><strong>Idea clave:</strong> <code>GROUP BY</code> y las funciones ventana no compiten. Primero puedes crear grupos y después analizar esos grupos con una ventana.</div>
       </google-codelab-step>
 
       <!-- Ranking -->
       <google-codelab-step label="Funciones ventana: ranking" duration="0">
-        <p>Las funciones de ranking asignan posiciones según un orden. La diferencia principal está en cómo tratan los empates.</p>
+        <p>Las funciones de ranking asignan una posición a cada fila según el <code>ORDER BY</code> de la ventana. Se utilizan para crear clasificaciones, seleccionar los primeros registros de cada grupo o dividir los resultados en segmentos.</p>
+        <p>La elección entre <code>ROW_NUMBER</code>, <code>RANK</code> y <code>DENSE_RANK</code> depende de cómo debe tratarse un empate.</p>
         <table>
           <thead><tr><th>Comando/Función</th><th>Descripción</th><th>Ejemplo</th></tr></thead>
           <tbody>
@@ -118,57 +166,134 @@ WHERE ListPrice &gt; 0;
             <tr><td><code>PERCENT_RANK()</code></td><td>Expresa la posición relativa entre 0 y 1.</td><td><code>PERCENT_RANK() OVER (ORDER BY ListPrice)</code></td></tr>
           </tbody>
         </table>
+        <h3>Ejemplo 1 (básico): ordenar productos dentro de cada subcategoría</h3>
         <div class="code-container"><button class="copy-btn" onclick="copyCode(this)">Copiar</button><pre><code class="language-sql">
 SELECT Name, ProductSubcategoryID, ListPrice,
+       ROW_NUMBER() OVER (
+           PARTITION BY ProductSubcategoryID
+           ORDER BY ListPrice DESC, ProductID
+       ) AS numero_fila,
        RANK() OVER (
            PARTITION BY ProductSubcategoryID
            ORDER BY ListPrice DESC
-       ) AS rango
+       ) AS rango,
+       DENSE_RANK() OVER (
+           PARTITION BY ProductSubcategoryID
+           ORDER BY ListPrice DESC
+       ) AS rango_sin_saltos
 FROM Production.Product
-WHERE ListPrice &gt; 0;
+WHERE ListPrice &gt; 0
+  AND ProductSubcategoryID IS NOT NULL;
 </code></pre></div>
-        <p><code>DESC</code> coloca el mayor precio en el puesto 1. La partición hace que el ranking vuelva a comenzar en cada subcategoría.</p>
+        <p><code>DESC</code> coloca el mayor precio en el puesto 1. <code>ProductID</code> desempata <code>ROW_NUMBER()</code> de forma estable, mientras <code>RANK()</code> y <code>DENSE_RANK()</code> conservan el empate por precio.</p>
+
+        <h3>Ejemplo 2 (intermedio): obtener los tres precios más altos de cada subcategoría</h3>
+        <div class="code-container"><button class="copy-btn" onclick="copyCode(this)">Copiar</button><pre><code class="language-sql">
+;WITH ProductosClasificados AS (
+    SELECT ProductID, Name, ProductSubcategoryID, ListPrice,
+           DENSE_RANK() OVER (
+               PARTITION BY ProductSubcategoryID
+               ORDER BY ListPrice DESC
+           ) AS posicion
+    FROM Production.Product
+    WHERE ListPrice &gt; 0
+      AND ProductSubcategoryID IS NOT NULL
+)
+SELECT ProductID, Name, ProductSubcategoryID, ListPrice, posicion
+FROM ProductosClasificados
+WHERE posicion &lt;= 3
+ORDER BY ProductSubcategoryID, posicion, Name;
+</code></pre></div>
+        <ul>
+          <li>La función ventana se calcula dentro del CTE.</li>
+          <li>El <code>SELECT</code> externo puede filtrar la columna <code>posicion</code>.</li>
+          <li>Con <code>DENSE_RANK()</code>, todos los productos empatados en uno de los tres precios principales permanecen en el resultado.</li>
+        </ul>
+        <div class="important-box"><strong>Tip:</strong> no se puede usar directamente una función ventana en <code>WHERE</code>. Calcúlala primero en un CTE o subconsulta y filtra el resultado en la consulta externa.</div>
       </google-codelab-step>
 
       <!-- Desplazamiento y marcos fusionados -->
       <google-codelab-step label="Funciones ventana: desplazamiento y marcos" duration="0">
-        <p>Estas funciones comparan la fila actual con otras filas de la ventana. Los marcos determinan cuántas filas cercanas participan en un promedio o suma móvil.</p>
+        <p>Las funciones de desplazamiento consultan otra fila de la misma ventana sin realizar un <code>JOIN</code> de la tabla consigo misma. Son especialmente útiles para comparar periodos, pedidos o mediciones consecutivas.</p>
+        <p>Los marcos de filas indican qué parte de la ventana participa en un acumulado o promedio móvil. Siempre deben interpretarse junto con el <code>ORDER BY</code>.</p>
         <table>
           <thead><tr><th>Comando/Función</th><th>Descripción</th><th>Ejemplo</th></tr></thead>
           <tbody>
-            <tr><td><code>LAG()</code></td><td>Devuelve el valor de la fila anterior.</td><td><code>LAG(TotalDue) OVER (ORDER BY OrderDate)</code></td></tr>
-            <tr><td><code>LEAD()</code></td><td>Devuelve el valor de la fila siguiente.</td><td><code>LEAD(TotalDue) OVER (ORDER BY OrderDate)</code></td></tr>
-            <tr><td><code>FIRST_VALUE()/LAST_VALUE()</code></td><td>Obtienen el primer o último valor del marco.</td><td><code>FIRST_VALUE(TotalDue) OVER (ORDER BY OrderDate)</code></td></tr>
-            <tr><td><code>ROWS BETWEEN</code></td><td>Define las filas usadas en un cálculo móvil.</td><td><code>ROWS BETWEEN 2 PRECEDING AND CURRENT ROW</code></td></tr>
+            <tr><td><code>LAG()</code></td><td>Devuelve el valor de la fila anterior.</td><td><code>LAG(TotalDue) OVER (PARTITION BY CustomerID ORDER BY OrderDate, SalesOrderID)</code></td></tr>
+            <tr><td><code>LEAD()</code></td><td>Devuelve el valor de la fila siguiente.</td><td><code>LEAD(TotalDue) OVER (PARTITION BY CustomerID ORDER BY OrderDate, SalesOrderID)</code></td></tr>
+            <tr><td><code>FIRST_VALUE()</code></td><td>Devuelve el primer valor según el orden de la ventana.</td><td><code>FIRST_VALUE(TotalDue) OVER (PARTITION BY CustomerID ORDER BY OrderDate, SalesOrderID)</code></td></tr>
+            <tr><td><code>LAST_VALUE()</code></td><td>Devuelve el último valor del marco. Para abarcar toda la partición se debe ampliar el final del marco.</td><td><code>LAST_VALUE(TotalDue) OVER (PARTITION BY CustomerID ORDER BY OrderDate, SalesOrderID ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING)</code></td></tr>
+            <tr><td><code>ROWS BETWEEN</code></td><td>Define las filas incluidas en un cálculo acumulado o móvil.</td><td><code>ROWS BETWEEN 2 PRECEDING AND CURRENT ROW</code></td></tr>
           </tbody>
         </table>
+        <h3>Ejemplo 1 (básico): consultar el pedido anterior y el siguiente</h3>
         <div class="code-container"><button class="copy-btn" onclick="copyCode(this)">Copiar</button><pre><code class="language-sql">
 SELECT CustomerID, SalesOrderID, OrderDate, TotalDue,
        LAG(TotalDue) OVER (
-           PARTITION BY CustomerID ORDER BY OrderDate, SalesOrderID
+           PARTITION BY CustomerID
+           ORDER BY OrderDate, SalesOrderID
        ) AS pedido_anterior,
-       AVG(TotalDue) OVER (
-           PARTITION BY CustomerID ORDER BY OrderDate, SalesOrderID
-           ROWS BETWEEN 2 PRECEDING AND CURRENT ROW
-       ) AS promedio_movil
-FROM Sales.SalesOrderHeader;
+       LEAD(TotalDue) OVER (
+           PARTITION BY CustomerID
+           ORDER BY OrderDate, SalesOrderID
+       ) AS pedido_siguiente
+FROM Sales.SalesOrderHeader
+WHERE CustomerID BETWEEN 11000 AND 11010
+ORDER BY CustomerID, OrderDate, SalesOrderID;
 </code></pre></div>
-        <p>La primera fila de cada cliente devuelve <code>NULL</code> en <code>LAG()</code>. El promedio móvil usa el pedido actual y hasta dos anteriores.</p>
+        <p><code>LAG()</code> busca la fila anterior y <code>LEAD()</code> la siguiente dentro del mismo cliente. La primera fila no tiene pedido anterior y la última no tiene pedido siguiente, por lo que esos valores serán <code>NULL</code>.</p>
+
+        <h3>Ejemplo 2 (intermedio): diferencia, acumulado y promedio móvil</h3>
+        <div class="code-container"><button class="copy-btn" onclick="copyCode(this)">Copiar</button><pre><code class="language-sql">
+;WITH Historial AS (
+    SELECT CustomerID, SalesOrderID, OrderDate, TotalDue,
+           LAG(TotalDue) OVER (
+               PARTITION BY CustomerID
+               ORDER BY OrderDate, SalesOrderID
+           ) AS pedido_anterior,
+           SUM(TotalDue) OVER (
+               PARTITION BY CustomerID
+               ORDER BY OrderDate, SalesOrderID
+               ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+           ) AS venta_acumulada,
+           AVG(TotalDue) OVER (
+               PARTITION BY CustomerID
+               ORDER BY OrderDate, SalesOrderID
+               ROWS BETWEEN 2 PRECEDING AND CURRENT ROW
+           ) AS promedio_ultimos_tres
+    FROM Sales.SalesOrderHeader
+    WHERE CustomerID BETWEEN 11000 AND 11010
+)
+SELECT CustomerID, SalesOrderID, OrderDate, TotalDue,
+       pedido_anterior,
+       TotalDue - pedido_anterior AS diferencia,
+       venta_acumulada,
+       promedio_ultimos_tres
+FROM Historial
+ORDER BY CustomerID, OrderDate, SalesOrderID;
+</code></pre></div>
+        <ul>
+          <li>El CTE permite reutilizar <code>pedido_anterior</code> para obtener la diferencia sin repetir <code>LAG()</code>.</li>
+          <li><code>UNBOUNDED PRECEDING</code> inicia el acumulado en el primer pedido del cliente.</li>
+          <li><code>2 PRECEDING</code> incluye hasta dos pedidos anteriores y la fila actual.</li>
+        </ul>
+        <div class="important-box"><strong>Tip:</strong> agrega una segunda columna de desempate al <code>ORDER BY</code>, como <code>SalesOrderID</code>, cuando varias filas puedan tener la misma fecha.</div>
       </google-codelab-step>
 
-      <!-- CTE y PIVOT centralizados -->
-      <google-codelab-step label="CTE y PIVOT" duration="0">
-        <h3>CTE: organizar consultas</h3>
-        <p>Un CTE es un resultado temporal con nombre. Ayuda a dividir una consulta compleja en pasos y existe únicamente durante la sentencia siguiente.</p>
+      <!-- Herramientas complementarias centralizadas -->
+      <google-codelab-step label="CTE, PIVOT y UNPIVOT" duration="0">
+        <p>Estas herramientas son complementarias. En esta práctica basta con reconocer su propósito y aplicar su estructura básica: un CTE organiza una consulta; <code>PIVOT</code> y <code>UNPIVOT</code> cambian la forma del resultado.</p>
         <table>
           <thead><tr><th>Comando/Función</th><th>Descripción</th><th>Ejemplo</th></tr></thead>
           <tbody>
-            <tr><td><code>WITH ... AS</code></td><td>Declara el resultado temporal.</td><td><code>;WITH Productos AS (SELECT * FROM Production.Product)</code></td></tr>
-            <tr><td>CTE múltiples</td><td>Se separan por coma; uno puede usar el resultado anterior.</td><td><code>WITH A AS (...), B AS (SELECT * FROM A)</code></td></tr>
-            <tr><td>CTE recursiva</td><td>Genera secuencias o recorre jerarquías con <code>UNION ALL</code>.</td><td><code>SELECT 1 UNION ALL SELECT n + 1 FROM N WHERE n &lt; 5</code></td></tr>
-            <tr><td><code>MAXRECURSION</code></td><td>Controla el límite de repeticiones.</td><td><code>OPTION (MAXRECURSION 100)</code></td></tr>
+            <tr><td><code>WITH ... AS</code></td><td>Da nombre a un resultado temporal que utiliza la sentencia siguiente.</td><td><code>;WITH Productos AS (SELECT ...)</code></td></tr>
+            <tr><td><code>PIVOT</code></td><td>Convierte categorías almacenadas en filas en columnas y agrega sus valores.</td><td><code>PIVOT (SUM(Monto) FOR Anio IN ([2013], [2014]))</code></td></tr>
+            <tr><td><code>FOR ... IN (...)</code></td><td>Indica qué columna contiene las categorías y cuáles serán las columnas finales.</td><td><code>FOR Anio IN ([2013], [2014])</code></td></tr>
+            <tr><td><code>UNPIVOT</code></td><td>Convierte las columnas indicadas nuevamente en filas.</td><td><code>UNPIVOT (Monto FOR Anio IN ([2013], [2014]))</code></td></tr>
           </tbody>
         </table>
+
+        <h3>Ejemplo 1 (básico): CTE para organizar un filtro</h3>
         <div class="code-container"><button class="copy-btn" onclick="copyCode(this)">Copiar</button><pre><code class="language-sql">
 ;WITH ProductosConPrecio AS (
     SELECT ProductID, Name, ListPrice
@@ -177,43 +302,54 @@ FROM Sales.SalesOrderHeader;
 )
 SELECT * FROM ProductosConPrecio;
 </code></pre></div>
-        <p><strong>Línea clave:</strong> el <code>SELECT</code> final es la única sentencia que puede utilizar ese CTE.</p>
+        <p>El CTE no crea una tabla permanente. En esta guía se utilizarán CTE no recursivos; las CTE recursivas únicamente quedan como referencia para secuencias y jerarquías.</p>
 
-        <h3>PIVOT: transformar el reporte</h3>
-        <p><code>PIVOT</code> convierte valores de filas en columnas; <code>UNPIVOT</code> devuelve columnas a filas. La lista <code>IN (...)</code> debe conocerse antes de ejecutar un PIVOT normal.</p>
-        <table>
-          <thead><tr><th>Comando/Función</th><th>Descripción</th><th>Ejemplo</th></tr></thead>
-          <tbody>
-            <tr><td><code>PIVOT</code></td><td>Crea columnas y agrega sus valores.</td><td><code>PIVOT (SUM(LineTotal) FOR Anio IN ([2011], [2012]))</code></td></tr>
-            <tr><td><code>FOR ... IN (...)</code></td><td>Define la columna pivote y las columnas finales.</td><td><code>FOR Anio IN ([2011], [2012], [2013], [2014])</code></td></tr>
-            <tr><td><code>UNPIVOT</code></td><td>Convierte las columnas indicadas en filas.</td><td><code>UNPIVOT (Monto FOR Anio IN ([2011], [2012]))</code></td></tr>
-          </tbody>
-        </table>
+        <h3>Ejemplo 2 (básico): convertir años en columnas con PIVOT</h3>
         <div class="code-container"><button class="copy-btn" onclick="copyCode(this)">Copiar</button><pre><code class="language-sql">
-SELECT ProductID, [2011], [2012], [2013], [2014]
+SELECT ProductID, [2013], [2014]
 FROM (
   SELECT d.ProductID, YEAR(h.OrderDate) AS Anio, d.LineTotal
   FROM Sales.SalesOrderHeader h
   JOIN Sales.SalesOrderDetail d ON d.SalesOrderID = h.SalesOrderID
 ) fuente
-PIVOT (SUM(LineTotal) FOR Anio IN ([2011], [2012], [2013], [2014])) p;
+PIVOT (
+  SUM(LineTotal) FOR Anio IN ([2013], [2014])
+) p;
 </code></pre></div>
-        <p><strong>Líneas clave:</strong> <code>YEAR(OrderDate)</code> genera las categorías que se vuelven columnas y <code>SUM(LineTotal)</code> agrega los valores de cada producto y año.</p>
+        <p><code>YEAR(OrderDate)</code> crea las categorías y la lista <code>IN</code> define las columnas visibles. En un PIVOT estático, esas columnas deben conocerse antes de ejecutar la consulta.</p>
+
+        <h3>Ejemplo 3 (básico): devolver columnas a filas con UNPIVOT</h3>
+        <div class="code-container"><button class="copy-btn" onclick="copyCode(this)">Copiar</button><pre><code class="language-sql">
+;WITH Resumen AS (
+    SELECT *
+    FROM (VALUES (1, 1000.00, 1200.00))
+         v(ProductID, [2013], [2014])
+)
+SELECT ProductID, Anio, Monto
+FROM Resumen
+UNPIVOT (
+    Monto FOR Anio IN ([2013], [2014])
+) u;
+</code></pre></div>
+        <p>El resultado contiene dos filas para el producto: una para 2013 y otra para 2014. <code>UNPIVOT</code> omite los valores <code>NULL</code> de las columnas transformadas.</p>
       </google-codelab-step>
 
       <!-- Comparación -->
       <google-codelab-step label="Comparación de herramientas" duration="0">
+        <p>Selecciona la herramienta según la pregunta que deseas responder. Las primeras cinco filas corresponden al contenido principal de la práctica.</p>
         <table>
           <thead><tr><th>Tema</th><th>Comandos principales</th><th>Cuándo usarlo</th></tr></thead>
           <tbody>
+            <tr><td>Estructura de ventana</td><td><code>OVER</code>, <code>PARTITION BY</code>, <code>ORDER BY</code></td><td>Definir las filas relacionadas, sus grupos y su orden.</td></tr>
             <tr><td>Agregación ventana</td><td><code>SUM/AVG/MIN/MAX/COUNT OVER</code></td><td>Estadísticas por grupo conservando cada fila.</td></tr>
-            <tr><td>Ranking</td><td><code>ROW_NUMBER</code>, <code>RANK</code>, <code>DENSE_RANK</code>, <code>NTILE</code></td><td>Numerar, clasificar o dividir registros.</td></tr>
+            <tr><td>Ranking</td><td><code>ROW_NUMBER</code>, <code>RANK</code>, <code>DENSE_RANK</code>, <code>NTILE</code>, <code>PERCENT_RANK</code></td><td>Numerar, clasificar, dividir o medir la posición relativa.</td></tr>
             <tr><td>Desplazamiento</td><td><code>LAG</code>, <code>LEAD</code>, <code>FIRST_VALUE</code>, <code>LAST_VALUE</code></td><td>Comparar filas anteriores, siguientes o de referencia.</td></tr>
             <tr><td>Marcos</td><td><code>ROWS BETWEEN</code></td><td>Promedios móviles y sumas rodantes.</td></tr>
-            <tr><td>CTE</td><td><code>WITH</code>, CTE múltiples y recursivas</td><td>Organizar consultas en pasos o generar secuencias.</td></tr>
+            <tr><td>CTE</td><td><code>WITH ... AS</code></td><td>Organizar una consulta en etapas y reutilizar columnas calculadas.</td></tr>
             <tr><td>PIVOT</td><td><code>PIVOT</code>, <code>UNPIVOT</code>, <code>FOR ... IN</code></td><td>Convertir filas en columnas y viceversa.</td></tr>
           </tbody>
         </table>
+        <div class="important-box"><strong>Ruta rápida:</strong> usa agregación ventana para conservar filas; ranking para asignar posiciones; desplazamiento para comparar periodos; marcos para acumulados; CTE para ordenar la solución; PIVOT/UNPIVOT para cambiar el formato final.</div>
       </google-codelab-step>
 
       <!-- Práctica -->
