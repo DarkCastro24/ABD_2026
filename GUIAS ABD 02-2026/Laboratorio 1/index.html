@@ -27,6 +27,31 @@
         border-radius: 3px; cursor: pointer;
       }
       pre { white-space: pre-wrap; }
+      .result-title {
+        color: #188038;
+        font-weight: 700;
+        margin: 14px 0 8px;
+      }
+      .result-note {
+        color: #5f6368;
+        font-size: 0.92em;
+        margin-top: 6px;
+      }
+      .result-table {
+        border-collapse: collapse;
+        table-layout: fixed;
+        width: 100%;
+      }
+      .result-table th,
+      .result-table td {
+        border: 1px solid #dadce0;
+        font-size: 0.88em;
+        overflow-wrap: anywhere;
+        padding: 8px;
+        text-align: left;
+        vertical-align: top;
+      }
+      .result-table th { background-color: #f1f3f4; }
     </style>
   </head>
   <body>
@@ -79,6 +104,16 @@ SELECT ProductID, Name, ProductSubcategoryID, ListPrice,
 FROM Production.Product
 WHERE ListPrice &gt; 0;
 </code></pre></div>
+        <p class="result-title">Resultado esperado (muestra)</p>
+        <table class="result-table">
+          <thead><tr><th>ProductID</th><th>Name</th><th>ProductSubcategoryID</th><th>ListPrice</th><th>promedio_<wbr />subcategoria</th></tr></thead>
+          <tbody>
+            <tr><td>101</td><td>Producto A</td><td>1</td><td>800.00</td><td>700.00</td></tr>
+            <tr><td>102</td><td>Producto B</td><td>1</td><td>600.00</td><td>700.00</td></tr>
+            <tr><td>201</td><td>Producto C</td><td>2</td><td>300.00</td><td>300.00</td></tr>
+          </tbody>
+        </table>
+        <p class="result-note">Muestra didáctica: el promedio de la subcategoría se repite en cada producto sin eliminar ninguna fila. Los valores exactos dependerán de <code>AdventureWorks2022</code>.</p>
         <ul>
           <li><code>WHERE</code> filtra antes del cálculo.</li>
           <li>La partición forma una ventana por subcategoría.</li>
@@ -95,6 +130,16 @@ FROM Production.Product
 WHERE ListPrice &gt; 0
   AND ProductSubcategoryID IS NOT NULL;
 </code></pre></div>
+        <p class="result-title">Resultado esperado (muestra)</p>
+        <table class="result-table">
+          <thead><tr><th>ProductID</th><th>Name</th><th>ProductSubcategoryID</th><th>ListPrice</th><th>promedio_<wbr />general</th><th>productos_en_<wbr />subcategoria</th></tr></thead>
+          <tbody>
+            <tr><td>101</td><td>Producto A</td><td>1</td><td>800.00</td><td>566.67</td><td>2</td></tr>
+            <tr><td>102</td><td>Producto B</td><td>1</td><td>600.00</td><td>566.67</td><td>2</td></tr>
+            <tr><td>201</td><td>Producto C</td><td>2</td><td>300.00</td><td>566.67</td><td>1</td></tr>
+          </tbody>
+        </table>
+        <p class="result-note">Muestra didáctica: <code>promedio_general</code> se repite en todas las filas, mientras el conteo cambia según la subcategoría.</p>
         <p><code>OVER()</code> calcula un único promedio general y lo repite en cada fila. La segunda ventana se reinicia por subcategoría y cuenta cuántos productos contiene cada una.</p>
         <div class="important-box"><strong>Tip:</strong> comienza con <code>OVER()</code> y agrega <code>PARTITION BY</code> solamente cuando el cálculo deba reiniciarse por cliente, vendedor, territorio o categoría.</div>
       </google-codelab-step>
@@ -122,6 +167,16 @@ FROM Production.Product
 WHERE ListPrice &gt; 0
   AND ProductSubcategoryID IS NOT NULL;
 </code></pre></div>
+        <p class="result-title">Resultado esperado (muestra)</p>
+        <table class="result-table">
+          <thead><tr><th>Name</th><th>ProductSubcategoryID</th><th>ListPrice</th><th>minimo</th><th>maximo</th><th>promedio</th></tr></thead>
+          <tbody>
+            <tr><td>Producto A</td><td>1</td><td>800.00</td><td>600.00</td><td>800.00</td><td>700.00</td></tr>
+            <tr><td>Producto B</td><td>1</td><td>600.00</td><td>600.00</td><td>800.00</td><td>700.00</td></tr>
+            <tr><td>Producto C</td><td>2</td><td>300.00</td><td>300.00</td><td>300.00</td><td>300.00</td></tr>
+          </tbody>
+        </table>
+        <p class="result-note">Muestra didáctica: los tres valores estadísticos se repiten para los productos pertenecientes a la misma subcategoría.</p>
         <p>Las tres funciones usan la misma partición. Cada producto se puede comparar inmediatamente con los límites y el promedio de su propia subcategoría.</p>
 
         <h3>Ejemplo 2 (intermedio): combinar <code>GROUP BY</code> con una función ventana</h3>
@@ -144,6 +199,16 @@ WHERE SalesPersonID IS NOT NULL
 GROUP BY SalesPersonID, YEAR(OrderDate)
 ORDER BY SalesPersonID, anio;
 </code></pre></div>
+        <p class="result-title">Resultado esperado (muestra)</p>
+        <table class="result-table">
+          <thead><tr><th>SalesPersonID</th><th>anio</th><th>ventas_<wbr />anuales</th><th>ventas_del_<wbr />vendedor</th><th>porcentaje_del_<wbr />total</th></tr></thead>
+          <tbody>
+            <tr><td>274</td><td>2011</td><td>40000.00</td><td>100000.00</td><td>40.00</td></tr>
+            <tr><td>274</td><td>2012</td><td>60000.00</td><td>100000.00</td><td>60.00</td></tr>
+            <tr><td>275</td><td>2011</td><td>75000.00</td><td>75000.00</td><td>100.00</td></tr>
+          </tbody>
+        </table>
+        <p class="result-note">Muestra didáctica: la venta total del vendedor se conserva en cada año y los porcentajes de cada vendedor suman aproximadamente 100%.</p>
         <ul>
           <li>El <code>SUM(TotalDue)</code> interno obtiene las ventas de cada vendedor por año.</li>
           <li>El <code>SUM(...) OVER</code> externo suma esos resultados anuales sin eliminar las filas de cada año.</li>
@@ -185,6 +250,16 @@ FROM Production.Product
 WHERE ListPrice &gt; 0
   AND ProductSubcategoryID IS NOT NULL;
 </code></pre></div>
+        <p class="result-title">Resultado esperado (muestra)</p>
+        <table class="result-table">
+          <thead><tr><th>Name</th><th>ProductSubcategoryID</th><th>ListPrice</th><th>numero_<wbr />fila</th><th>rango</th><th>rango_sin_<wbr />saltos</th></tr></thead>
+          <tbody>
+            <tr><td>Producto A</td><td>1</td><td>1200.00</td><td>1</td><td>1</td><td>1</td></tr>
+            <tr><td>Producto B</td><td>1</td><td>1200.00</td><td>2</td><td>1</td><td>1</td></tr>
+            <tr><td>Producto C</td><td>1</td><td>900.00</td><td>3</td><td>3</td><td>2</td></tr>
+          </tbody>
+        </table>
+        <p class="result-note">Muestra didáctica: ante el empate de 1200.00, <code>ROW_NUMBER()</code> asigna números diferentes, <code>RANK()</code> deja un salto y <code>DENSE_RANK()</code> no lo deja.</p>
         <p><code>DESC</code> coloca el mayor precio en el puesto 1. <code>ProductID</code> desempata <code>ROW_NUMBER()</code> de forma estable, mientras <code>RANK()</code> y <code>DENSE_RANK()</code> conservan el empate por precio.</p>
 
         <h3>Ejemplo 2 (intermedio): obtener los tres precios más altos de cada subcategoría</h3>
@@ -204,6 +279,17 @@ FROM ProductosClasificados
 WHERE posicion &lt;= 3
 ORDER BY ProductSubcategoryID, posicion, Name;
 </code></pre></div>
+        <p class="result-title">Resultado esperado (muestra)</p>
+        <table class="result-table">
+          <thead><tr><th>ProductID</th><th>Name</th><th>ProductSubcategoryID</th><th>ListPrice</th><th>posicion</th></tr></thead>
+          <tbody>
+            <tr><td>101</td><td>Producto A</td><td>1</td><td>1200.00</td><td>1</td></tr>
+            <tr><td>102</td><td>Producto B</td><td>1</td><td>1200.00</td><td>1</td></tr>
+            <tr><td>103</td><td>Producto C</td><td>1</td><td>900.00</td><td>2</td></tr>
+            <tr><td>104</td><td>Producto D</td><td>1</td><td>750.00</td><td>3</td></tr>
+          </tbody>
+        </table>
+        <p class="result-note">Muestra didáctica: pueden aparecer más de tres filas en una subcategoría cuando varios productos comparten uno de los tres precios principales.</p>
         <ul>
           <li>La función ventana se calcula dentro del CTE.</li>
           <li>El <code>SELECT</code> externo puede filtrar la columna <code>posicion</code>.</li>
@@ -241,6 +327,16 @@ FROM Sales.SalesOrderHeader
 WHERE CustomerID BETWEEN 11000 AND 11010
 ORDER BY CustomerID, OrderDate, SalesOrderID;
 </code></pre></div>
+        <p class="result-title">Resultado esperado (muestra)</p>
+        <table class="result-table">
+          <thead><tr><th>CustomerID</th><th>SalesOrderID</th><th>OrderDate</th><th>TotalDue</th><th>pedido_<wbr />anterior</th><th>pedido_<wbr />siguiente</th></tr></thead>
+          <tbody>
+            <tr><td>11000</td><td>50001</td><td>2011-01-10</td><td>500.00</td><td>NULL</td><td>800.00</td></tr>
+            <tr><td>11000</td><td>50002</td><td>2011-02-15</td><td>800.00</td><td>500.00</td><td>650.00</td></tr>
+            <tr><td>11000</td><td>50003</td><td>2011-03-20</td><td>650.00</td><td>800.00</td><td>NULL</td></tr>
+          </tbody>
+        </table>
+        <p class="result-note">Muestra didáctica: la primera fila no tiene valor anterior y la última no tiene valor siguiente.</p>
         <p><code>LAG()</code> busca la fila anterior y <code>LEAD()</code> la siguiente dentro del mismo cliente. La primera fila no tiene pedido anterior y la última no tiene pedido siguiente, por lo que esos valores serán <code>NULL</code>.</p>
 
         <h3>Ejemplo 2 (intermedio): diferencia, acumulado y promedio móvil</h3>
@@ -272,6 +368,16 @@ SELECT CustomerID, SalesOrderID, OrderDate, TotalDue,
 FROM Historial
 ORDER BY CustomerID, OrderDate, SalesOrderID;
 </code></pre></div>
+        <p class="result-title">Resultado esperado (muestra)</p>
+        <table class="result-table">
+          <thead><tr><th>CustomerID</th><th>SalesOrderID</th><th>TotalDue</th><th>pedido_<wbr />anterior</th><th>diferencia</th><th>venta_<wbr />acumulada</th><th>promedio_<wbr />ultimos_<wbr />tres</th></tr></thead>
+          <tbody>
+            <tr><td>11000</td><td>50001</td><td>500.00</td><td>NULL</td><td>NULL</td><td>500.00</td><td>500.00</td></tr>
+            <tr><td>11000</td><td>50002</td><td>800.00</td><td>500.00</td><td>300.00</td><td>1300.00</td><td>650.00</td></tr>
+            <tr><td>11000</td><td>50003</td><td>650.00</td><td>800.00</td><td>-150.00</td><td>1950.00</td><td>650.00</td></tr>
+          </tbody>
+        </table>
+        <p class="result-note">Muestra didáctica: el acumulado crece en cada pedido y el promedio móvil utiliza hasta tres pedidos del mismo cliente.</p>
         <ul>
           <li>El CTE permite reutilizar <code>pedido_anterior</code> para obtener la diferencia sin repetir <code>LAG()</code>.</li>
           <li><code>UNBOUNDED PRECEDING</code> inicia el acumulado en el primer pedido del cliente.</li>
@@ -302,6 +408,16 @@ ORDER BY CustomerID, OrderDate, SalesOrderID;
 )
 SELECT * FROM ProductosConPrecio;
 </code></pre></div>
+        <p class="result-title">Resultado esperado (muestra)</p>
+        <table class="result-table">
+          <thead><tr><th>ProductID</th><th>Name</th><th>ListPrice</th></tr></thead>
+          <tbody>
+            <tr><td>101</td><td>Producto A</td><td>800.00</td></tr>
+            <tr><td>102</td><td>Producto B</td><td>600.00</td></tr>
+            <tr><td>201</td><td>Producto C</td><td>300.00</td></tr>
+          </tbody>
+        </table>
+        <p class="result-note">Muestra didáctica: únicamente aparecen productos cuyo precio es mayor que cero; el CTE no modifica las columnas del resultado.</p>
         <p>El CTE no crea una tabla permanente. En esta guía se utilizarán CTE no recursivos; las CTE recursivas únicamente quedan como referencia para secuencias y jerarquías.</p>
 
         <h3>Ejemplo 2 (básico): convertir años en columnas con PIVOT</h3>
@@ -316,6 +432,16 @@ PIVOT (
   SUM(LineTotal) FOR Anio IN ([2013], [2014])
 ) p;
 </code></pre></div>
+        <p class="result-title">Resultado esperado (muestra)</p>
+        <table class="result-table">
+          <thead><tr><th>ProductID</th><th>2013</th><th>2014</th></tr></thead>
+          <tbody>
+            <tr><td>101</td><td>1000.00</td><td>1200.00</td></tr>
+            <tr><td>102</td><td>850.00</td><td>NULL</td></tr>
+            <tr><td>103</td><td>NULL</td><td>640.00</td></tr>
+          </tbody>
+        </table>
+        <p class="result-note">Muestra didáctica: cada año se convierte en una columna. Un <code>NULL</code> indica que el producto no tiene ventas para ese año.</p>
         <p><code>YEAR(OrderDate)</code> crea las categorías y la lista <code>IN</code> define las columnas visibles. En un PIVOT estático, esas columnas deben conocerse antes de ejecutar la consulta.</p>
 
         <h3>Ejemplo 3 (básico): devolver columnas a filas con UNPIVOT</h3>
@@ -331,6 +457,15 @@ UNPIVOT (
     Monto FOR Anio IN ([2013], [2014])
 ) u;
 </code></pre></div>
+        <p class="result-title">Resultado esperado</p>
+        <table class="result-table">
+          <thead><tr><th>ProductID</th><th>Anio</th><th>Monto</th></tr></thead>
+          <tbody>
+            <tr><td>1</td><td>2013</td><td>1000.00</td></tr>
+            <tr><td>1</td><td>2014</td><td>1200.00</td></tr>
+          </tbody>
+        </table>
+        <p class="result-note">Este resultado corresponde exactamente a los valores definidos dentro del CTE <code>Resumen</code>.</p>
         <p>El resultado contiene dos filas para el producto: una para 2013 y otra para 2014. <code>UNPIVOT</code> omite los valores <code>NULL</code> de las columnas transformadas.</p>
       </google-codelab-step>
 
