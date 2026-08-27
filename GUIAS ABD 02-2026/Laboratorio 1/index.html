@@ -52,6 +52,47 @@
         vertical-align: top;
       }
       .result-table th { background-color: #f1f3f4; }
+      .connection-panel {
+        background-color: #f8faff;
+        border: 1px solid #c8d7f0;
+        border-left: 5px solid #1a73e8;
+        border-radius: 6px;
+        margin: 14px 0;
+        padding: 16px 18px;
+      }
+      .connection-panel > p { margin-top: 0; }
+      .credentials-table {
+        border-collapse: separate;
+        border-spacing: 0;
+        margin: 8px 0 0;
+        width: 100%;
+      }
+      .credentials-table td {
+        background-color: #ffffff;
+        border-bottom: 1px solid #dfe5ef;
+        padding: 12px 16px;
+        vertical-align: middle;
+      }
+      .credentials-table tr:first-child td { border-top: 1px solid #dfe5ef; }
+      .credentials-table td:first-child {
+        border-left: 1px solid #dfe5ef;
+        color: #3c4043;
+        font-weight: 700;
+        width: 34%;
+      }
+      .credentials-table td:last-child { border-right: 1px solid #dfe5ef; }
+      .credentials-table code { font-size: 1em; }
+      .resource-section {
+        background-color: #fff8e1;
+        border-left: 5px solid #f9ab00;
+        border-radius: 4px;
+        margin-top: 22px;
+        padding: 14px 18px;
+      }
+      .resource-section h3 { margin-top: 0; }
+      .resource-list { margin-bottom: 0; }
+      .resource-list li { margin: 10px 0; }
+      .resource-list a { font-weight: 500; }
     </style>
   </head>
   <body>
@@ -497,17 +538,35 @@ UNPIVOT (
           <li>Documenta la función, partición y orden utilizados en cada solución.</li>
         </ul>
         <h3>Conexión al contenedor de Docker desde SQL Server Management Studio</h3>
-        <table>
-          <thead><tr><th>Campo</th><th>Valor</th></tr></thead>
-          <tbody>
-            <tr><td><strong>Server</strong></td><td><code>localhost,1434</code></td></tr>
-            <tr><td><strong>Authentication</strong></td><td><code>SQL Server Authentication</code></td></tr>
-            <tr><td><strong>Login</strong></td><td><code>sa</code></td></tr>
-            <tr><td><strong>Password</strong></td><td><code>Admin123!</code></td></tr>
-          </tbody>
-        </table>
+        <div class="connection-panel">
+          <p>Completa los campos de conexión en SQL Server Management Studio con los siguientes valores:</p>
+          <table class="credentials-table">
+            <tbody>
+              <tr><td>Servidor</td><td><code>localhost,1434</code></td></tr>
+              <tr><td>Autenticación</td><td><code>SQL Server Authentication</code></td></tr>
+              <tr><td>Usuario</td><td><code>sa</code></td></tr>
+              <tr><td>Contraseña</td><td><code>Admin123!</code></td></tr>
+            </tbody>
+          </table>
+        </div>
         <div class="important-box">
           <strong>Importante:</strong> antes de conectarte, activa la casilla <strong>Trust server certificate</strong> (Confiar en el certificado del servidor). La conexión no funcionará si esta opción no está habilitada.
+        </div>
+        <div class="resource-section">
+          <h3>Recursos para preparar el entorno</h3>
+          <ul class="resource-list">
+            <li>
+              <strong>Si no cuentas con el contenedor de SQL Server:</strong>
+              consulta el
+              <a href="https://ucaedusv-my.sharepoint.com/:p:/g/personal/jehumberstone_uca_edu_sv/IQCjUpCGCV4HTqUXcD8lOii7Ad1UgslzJ5WtCzJXGlAZFFc?e=pYTJfb" target="_blank" rel="noopener noreferrer">recurso de la clase para configurar SQL Server en Docker</a>.
+              Es posible que debas iniciar sesión con tu cuenta institucional.
+            </li>
+            <li>
+              <strong>Si no cuentas con SQL Server Management Studio:</strong>
+              puedes descargarlo siguiendo la
+              <a href="https://learn.microsoft.com/es-es/ssms/install/install" target="_blank" rel="noopener noreferrer">guía oficial de instalación de Microsoft</a>.
+            </li>
+          </ul>
         </div>
       </google-codelab-step>
       <!-- Créditos -->
