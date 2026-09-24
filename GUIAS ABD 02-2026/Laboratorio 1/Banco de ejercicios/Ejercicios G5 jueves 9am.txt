@@ -1,0 +1,90 @@
+/* ============================================================
+   LABORATORIO - GRUPO G5
+   JUEVES 9:00 a. m. - 11:00 a. m.
+   ============================================================ */
+
+
+-- Ejercicio 1. MÁXIMO POR CARGO
+-- Utiliza HumanResources.Employee para listar a los empleados y añadir una
+-- columna que muestre la cantidad máxima de horas de enfermedad
+-- (SickLeaveHours) permitidas, agrupadas por su cargo
+-- (PARTITION BY JobTitle).
+-----------------------------------------------------
+
+-- Tabla a utilizar:
+--   HumanResources.Employee.
+-------------------------
+
+-- Comandos requeridos:
+--   SELECT, FROM, MAX(), OVER(), PARTITION BY y ORDER BY.
+---------------------------------------------
+
+
+
+-- Ejercicio 2. RENDIMIENTO DE VENTAS
+-- Compara el subtotal de cada orden de venta con el total acumulado histórico
+-- específico del vendedor que la gestionó (PARTITION BY SalesPersonID).
+-----------------------------------------------------
+
+-- Tabla a utilizar:
+--   Sales.SalesOrderHeader.
+-------------------------
+
+-- Comandos requeridos:
+--   SELECT, FROM, SUM(), OVER(), PARTITION BY, ORDER BY,
+--   ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW, WHERE e IS NOT NULL.
+---------------------------------------------
+
+
+
+-- Ejercicio 3. SUMA RODANTE DE COMPRAS
+-- En Purchasing.PurchaseOrderHeader, calcula la suma móvil del subtotal de
+-- los últimos 5 pedidos realizados a cada proveedor (VendorID), utilizando
+-- el marco ROWS BETWEEN 4 PRECEDING AND CURRENT ROW.
+-----------------------------------------------------
+
+-- Tabla a utilizar:
+--   Purchasing.PurchaseOrderHeader.
+-------------------------
+
+-- Comandos requeridos:
+--   SELECT, FROM, SUM(), OVER(), PARTITION BY, ORDER BY y
+--   ROWS BETWEEN 4 PRECEDING AND CURRENT ROW.
+---------------------------------------------
+
+
+
+-- Ejercicio 4. SALARIO POR DEPARTAMENTO
+-- Realiza un JOIN entre empleados y HumanResources.Department para mostrar
+-- el salario de cada persona junto al salario promedio particionado por su
+-- departamento. Muestra únicamente el departamento actual y el registro
+-- salarial más reciente de cada empleado.
+-----------------------------------------------------
+
+-- Tablas a utilizar:
+--   HumanResources.Employee.
+--   HumanResources.EmployeeDepartmentHistory.
+--   HumanResources.Department.
+--   HumanResources.EmployeePayHistory.
+-------------------------
+
+-- Comandos requeridos:
+--   SELECT, FROM, INNER JOIN, ON, AVG(), MAX(), OVER(), PARTITION BY,
+--   WHERE, subconsulta correlacionada, IS NULL y ORDER BY.
+---------------------------------------------
+
+
+
+-- Ejercicio 5. PROMEDIO POR AÑO
+-- Consulta Sales.SalesOrderHeader, muestra la fecha de la orden y calcula el
+-- promedio del TotalDue particionando directamente por el año de la orden
+-- (PARTITION BY YEAR(OrderDate)).
+-----------------------------------------------------
+
+-- Tabla a utilizar:
+--   Sales.SalesOrderHeader.
+-------------------------
+
+-- Comandos requeridos:
+--   SELECT, FROM, AVG(), OVER(), PARTITION BY, YEAR() y ORDER BY.
+---------------------------------------------

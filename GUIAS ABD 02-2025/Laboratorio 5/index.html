@@ -4,9 +4,10 @@
     <meta charset="utf-8" />
     <meta content="width=device-width, minimum-scale=1.0, initial-scale=1.0, user-scalable=yes" name="viewport" />
     <title>Laboratorio 5 — Copias de seguridad en SQL Server</title>
-    <link href="https://fonts.googleapis.com/css?family=Roboto:300,400,500,700" rel="stylesheet" />
-    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet" />
-    <link href="https://storage.googleapis.com/claat-public/codelab-elements.css" rel="stylesheet" />
+
+<link rel="stylesheet" href="assets/fonts.css">
+  <link rel="stylesheet" href="assets/codelab-elements.css">
+  <link rel="stylesheet" href="assets/prettify.css">
     <style>
       .important-box {
         background-color: #e6f4ea;
@@ -741,11 +742,8 @@ SELECT * FROM person.Cliente ORDER BY Id;</code></pre>
         </p>
       </google-codelab-step>
     </google-codelab>
-    <script src="https://storage.googleapis.com/claat-public/native-shim.js"></script>
-    <script src="https://storage.googleapis.com/claat-public/custom-elements.min.js"></script>
-    <script src="https://storage.googleapis.com/claat-public/prettify.js"></script>
-    <script src="https://storage.googleapis.com/claat-public/codelab-elements.js"></script>
-    <script>
+
+<script>
       function copyCode(btn) {
         const code = btn.nextElementSibling.innerText;
         navigator.clipboard.writeText(code).then(() => {
@@ -754,5 +752,9 @@ SELECT * FROM person.Cliente ORDER BY Id;</code></pre>
         });
       }
     </script>
-  </body>
+    <script src="assets/native-shim.js"></script>
+  <script src="assets/custom-elements.min.js"></script>
+  <script src="assets/prettify.js"></script>
+  <script src="assets/codelab-elements.js"></script>
+</body>
 </html>

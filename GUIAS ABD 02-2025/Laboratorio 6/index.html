@@ -6,11 +6,11 @@
     <title>Laboratorio 06 — Auditoría de Bases de Datos en SQL Server</title>
 
     <!-- Google Fonts and Material Icons -->
-    <link href="https://fonts.googleapis.com/css?family=Roboto:300,400,500,700" rel="stylesheet" />
-    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet" />
 
-    <!-- Codelab Styles -->
-    <link href="https://storage.googleapis.com/claat-public/codelab-elements.css" rel="stylesheet" />
+<!-- Codelab Styles -->
+    <link rel="stylesheet" href="assets/fonts.css">
+  <link rel="stylesheet" href="assets/codelab-elements.css">
+  <link rel="stylesheet" href="assets/prettify.css">
 
     <style>
       /* Plantilla: plantilla_laboratorio */
@@ -245,11 +245,8 @@ FROM sys.fn_get_audit_file('C:\audits\*', DEFAULT, DEFAULT);
     </google-codelab>
 
     <!-- Codelab Scripts -->
-    <script src="https://storage.googleapis.com/claat-public/native-shim.js"></script>
-    <script src="https://storage.googleapis.com/claat-public/custom-elements.min.js"></script>
-    <script src="https://storage.googleapis.com/claat-public/prettify.js"></script>
-    <script src="https://storage.googleapis.com/claat-public/codelab-elements.js"></script>
-    <script>
+
+<script>
       function copyCode(btn) {
         const code = btn.nextElementSibling.innerText;
         navigator.clipboard.writeText(code).then(() => {
@@ -258,5 +255,9 @@ FROM sys.fn_get_audit_file('C:\audits\*', DEFAULT, DEFAULT);
         });
       }
     </script>
-  </body>
+    <script src="assets/native-shim.js"></script>
+  <script src="assets/custom-elements.min.js"></script>
+  <script src="assets/prettify.js"></script>
+  <script src="assets/codelab-elements.js"></script>
+</body>
 </html>

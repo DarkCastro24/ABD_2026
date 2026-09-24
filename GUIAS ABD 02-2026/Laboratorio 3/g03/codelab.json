@@ -1,0 +1,22 @@
+{
+  "environment": "web",
+  "format": "html",
+  "prefix": "https://storage.googleapis.com",
+  "updated": "2026-09-24T15:45:21.019289-06:00",
+  "id": "g03",
+  "duration": 69,
+  "title": "Laboratorio 3 — Auditoría de bases de datos en SQL Server",
+  "summary": "Auditoría del catálogo de una biblioteca: práctica guiada para estudiantes. Ciclo 02-2026, versión 1.",
+  "source": ".\\G03.md",
+  "theme": "",
+  "status": [
+    "published"
+  ],
+  "category": [
+    "databases"
+  ],
+  "tags": [
+    "databases"
+  ],
+  "url": "g03"
+}

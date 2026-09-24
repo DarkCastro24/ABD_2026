@@ -11,19 +11,11 @@
       Gestión de usuarios y administración de permisos en SQL Server
     </title>
     <!-- Google Fonts and Material Icons -->
-    <link
-      href="https://fonts.googleapis.com/css?family=Roboto:300,400,500,700"
-      rel="stylesheet"
-    />
-    <link
-      href="https://fonts.googleapis.com/icon?family=Material+Icons"
-      rel="stylesheet"
-    />
-    <!-- Codelab Styles -->
-    <link
-      href="https://storage.googleapis.com/claat-public/codelab-elements.css"
-      rel="stylesheet"
-    />
+
+<!-- Codelab Styles -->
+    <link rel="stylesheet" href="assets/fonts.css">
+  <link rel="stylesheet" href="assets/codelab-elements.css">
+  <link rel="stylesheet" href="assets/prettify.css">
     <link href="styles.css" rel="stylesheet" />
   </head>
 
@@ -1028,11 +1020,8 @@ WHERE grantee_principal_id = USER_ID('lector');
       </google-codelab-step>
     </google-codelab>
     <!-- Codelab Scripts -->
-    <script src="https://storage.googleapis.com/claat-public/native-shim.js"></script>
-    <script src="https://storage.googleapis.com/claat-public/custom-elements.min.js"></script>
-    <script src="https://storage.googleapis.com/claat-public/prettify.js"></script>
-    <script src="https://storage.googleapis.com/claat-public/codelab-elements.js"></script>
-    <script>
+
+<script>
       function copyCode(btn) {
         const code = btn.nextElementSibling.innerText;
         navigator.clipboard.writeText(code).then(() => {
@@ -1041,5 +1030,9 @@ WHERE grantee_principal_id = USER_ID('lector');
         });
       }
     </script>
-  </body>
+    <script src="assets/native-shim.js"></script>
+  <script src="assets/custom-elements.min.js"></script>
+  <script src="assets/prettify.js"></script>
+  <script src="assets/codelab-elements.js"></script>
+</body>
 </html>
