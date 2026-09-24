@@ -1,89 +1,87 @@
 ﻿-- Laboratorio 3 | Ciclo 02-2026 | Versión 1
 -- Autor: Diego Eduardo Castro Quintanilla
--- Catálogo de una biblioteca universitaria. Datos ficticios.
--- Ejecuta cada bloque siguiendo las explicaciones de la guía.
--- Requiere C:\AuditLogs\BibliotecaLab03\ en el servidor y permisos de escritura del servicio.
--- Comprueba que los objetos no existan. Ejecuta las inserciones una sola vez.
+-- Reservas ficticias de salas de cómputo universitarias.
+-- Requiere C:\AuditLogs\ReservasLab03\ en el servidor y permisos de escritura del servicio.
+-- Ejecuta cada bloque en orden y una sola vez, siguiendo la guía.
 
--- Comprobación previa de SSMS: no modifica datos
-USE master;
-
-PRINT N'Lote 1 ejecutado';
-GO
-
-SELECT DB_NAME() AS BaseActual;
-GO
-
--- Preparar el catálogo
+-- 1. Creación de la base de datos
 USE master;
 GO
 
-CREATE DATABASE BibliotecaLab03;
+CREATE DATABASE ReservasLab03;
 GO
 
-USE BibliotecaLab03;
+USE ReservasLab03;
 GO
 
--- Cada fila representa una ficha del catálogo.
-CREATE TABLE dbo.Libros (
-    Id INT PRIMARY KEY,
-    Titulo NVARCHAR(100) NOT NULL,
-    PrecioReferencia DECIMAL(10,2) NOT NULL
+-- Datos ficticios de reservas de salas de cómputo.
+CREATE TABLE dbo.ReservasLaboratorio (
+    IdReserva INT PRIMARY KEY,
+    Sala NVARCHAR(50) NOT NULL,
+    FechaReserva DATE NOT NULL,
+    Turno NVARCHAR(20) NOT NULL,
+    Estado NVARCHAR(20) NOT NULL
 );
 
--- La primera ficha está duplicada en otro catálogo y se retirará.
-INSERT INTO dbo.Libros (Id, Titulo, PrecioReferencia)
-VALUES (1, N'Introducción a la programación (ficha duplicada)', 25.00),
-       (2, N'Fundamentos de bases de datos', 32.50);
+INSERT INTO dbo.ReservasLaboratorio
+    (IdReserva, Sala, FechaReserva, Turno, Estado)
+VALUES (1, N'Sala de cómputo A', '2026-10-06', N'Mañana', N'Pendiente'),
+       (2, N'Sala de cómputo B', '2026-10-06', N'Tarde', N'Confirmada'),
+       (999, N'Sala de cómputo A', '2026-10-06', N'Mañana', N'Registro de prueba');
 GO
 
--- Configurar y activar la auditoría
+-- 2. Creación y activación de la auditoría
 USE master;
 GO
 
--- Define dónde se guardarán los eventos.
-CREATE SERVER AUDIT AuditoriaBiblioteca
+-- El objeto de servidor define dónde quedarán los eventos.
+CREATE SERVER AUDIT AuditoriaReservas
 TO FILE (
-    FILEPATH = N'C:\AuditLogs\BibliotecaLab03\',
+    FILEPATH = N'C:\AuditLogs\ReservasLab03\',
     MAXSIZE = 10 MB,
     MAX_FILES = 5
 )
 WITH (QUEUE_DELAY = 1000, ON_FAILURE = CONTINUE);
 GO
 
--- Crear el objeto no lo activa: es necesario encenderlo.
-ALTER SERVER AUDIT AuditoriaBiblioteca WITH (STATE = ON);
+ALTER SERVER AUDIT AuditoriaReservas WITH (STATE = ON);
 GO
 
-USE BibliotecaLab03;
+USE ReservasLab03;
 GO
 
--- Define qué acciones se registrarán y sobre qué tabla.
-CREATE DATABASE AUDIT SPECIFICATION AuditoriaBibliotecaDB
-FOR SERVER AUDIT AuditoriaBiblioteca
-ADD (SELECT, INSERT, DELETE ON OBJECT::dbo.Libros BY public)
+-- La especificación elige las acciones sobre la tabla.
+CREATE DATABASE AUDIT SPECIFICATION AuditoriaReservasDB
+FOR SERVER AUDIT AuditoriaReservas
+ADD (SELECT, INSERT, DELETE ON OBJECT::dbo.ReservasLaboratorio BY public)
 WITH (STATE = ON);
 GO
 
--- Simular la revisión del catálogo
-USE BibliotecaLab03;
+-- 3. Generar acciones
+USE ReservasLab03;
 GO
 
--- Consultar el catálogo antes de modificarlo.
-SELECT Id, Titulo, PrecioReferencia FROM dbo.Libros;
+-- Revisa las reservas antes de modificar la copia de trabajo.
+SELECT IdReserva, Sala, FechaReserva, Turno, Estado
+FROM dbo.ReservasLaboratorio
+ORDER BY IdReserva;
 
--- Registrar un nuevo título.
-INSERT INTO dbo.Libros (Id, Titulo, PrecioReferencia)
-VALUES (3, N'Redes de computadoras', 40.00);
+-- Registra una nueva reserva.
+INSERT INTO dbo.ReservasLaboratorio
+    (IdReserva, Sala, FechaReserva, Turno, Estado)
+VALUES (3, N'Sala de cómputo C', '2026-10-07', N'Mañana', N'Pendiente');
 
--- Retirar únicamente la ficha duplicada.
-DELETE FROM dbo.Libros WHERE Id = 1;
+-- Retira únicamente el registro de prueba.
+DELETE FROM dbo.ReservasLaboratorio
+WHERE IdReserva = 999;
 
--- Revisar cómo quedó el catálogo.
-SELECT Id, Titulo, PrecioReferencia FROM dbo.Libros ORDER BY Id;
+-- Comprueba el estado final de las reservas.
+SELECT IdReserva, Sala, FechaReserva, Turno, Estado
+FROM dbo.ReservasLaboratorio
+ORDER BY IdReserva;
 GO
 
--- Consultar las evidencias
+-- 4. Consultar eventos
 USE master;
 GO
 
@@ -91,12 +89,11 @@ SELECT event_time, action_id, succeeded,
        server_principal_name, database_name,
        schema_name, object_name, statement
 FROM sys.fn_get_audit_file(
-    N'C:\AuditLogs\BibliotecaLab03\*.sqlaudit', DEFAULT, DEFAULT)
-WHERE database_name = N'BibliotecaLab03'
+    N'C:\AuditLogs\ReservasLab03\*.sqlaudit', DEFAULT, DEFAULT)
+WHERE database_name = N'ReservasLab03'
   AND schema_name = N'dbo'
-  AND object_name = N'Libros'
+  AND object_name = N'ReservasLaboratorio'
 ORDER BY event_time DESC;
 GO
 
--- Ejercicio: agrega UPDATE a la especificación y cambia PrecioReferencia
--- del libro Id = 2 a 35.00. Sigue los pasos de la guía y conserva las evidencias.
+-- Ejercicio guiado: resuelve las cinco tareas de la guía y conserva las evidencias.

@@ -1,139 +1,139 @@
-html<html lang="es"><head><meta charset="utf-8"/>
-<meta content="width=device-width, initial-scale=1" name="viewport"/><meta content="#4F7DC9" name="theme-color"/>
+html<html lang="es">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1" name="viewport"/>
+<meta content="#4F7DC9" name="theme-color"/>
 <title>Laboratorio 3 — Auditoría de bases de datos en SQL Server</title>
-<link href="assets/fonts.css" rel="stylesheet"/><link href="assets/codelab-elements.css" rel="stylesheet"/>
-<link href="assets/prettify.css" rel="stylesheet"/><link href="styles.css" rel="stylesheet"/>
-</head><body><google-codelab environment="web" id="g03" title="Laboratorio 3 — Auditoría de bases de datos en SQL Server"><google-codelab-step duration="5" label="Introducción"><h2>Auditoría de bases de datos</h2>
-<p><strong>Administración de Bases de Datos · Ciclo 02-2026 · Laboratorio 3 · Versión 1</strong></p>
-<p>En clase aprendiste que los usuarios necesitan permisos para consultar o modificar una base de datos. Ahora vamos a observar qué ocurre después de conceder esos permisos: ¿cómo podemos saber <strong>qué instrucciones se ejecutaron y con qué cuenta</strong>? Para responder, configuraremos una auditoría y revisaremos los registros que produce.</p>
-<p>Trabajaremos con un caso distinto al de la clase. Imagina que apoyas al personal de una biblioteca universitaria que está preparando su catálogo de libros. Durante una revisión se consultan títulos, se agrega un libro y se elimina una ficha duplicada. Tu tarea será dejar evidencia de esas operaciones y aprender a interpretarla.</p>
-<h3>¿Qué vas a aprender?</h3><ul><li>Configurar el destino de los registros y elegir las acciones que quieres observar.</li><li>Relacionar las operaciones SELECT, INSERT y DELETE con sus eventos de auditoría.</li><li>Explicar qué información aporta un registro y qué conclusiones requieren una comprobación adicional.</li></ul>
-<div class="important-box">Avanza por bloques. Antes de ejecutar cada uno, lee para qué sirve; después, compara lo que obtuviste con el resultado esperado. Si aparece un error, revisa ese paso antes de continuar: los siguientes dependen de él.</div>
-<p>Las políticas de contraseñas que estudiaste en clase <strong>protegen el acceso</strong>, los permisos <strong>delimitan las acciones permitidas</strong> y la auditoría permite <strong>revisar las acciones que hemos decidido registrar</strong>. En esta práctica nos concentraremos en ese seguimiento.</p></google-codelab-step><google-codelab-step duration="7" label="¿Por qué necesitamos auditar?"><p>Piensa en esta situación: ayer un libro aparecía en el catálogo y hoy ya no está. Al consultar la tabla puedes confirmar que falta, pero ese resultado no explica cómo desapareció. Tal vez alguien eliminó una ficha equivocada o un proceso automático ejecutó una instrucción incorrecta. <strong>Una auditoría configurada antes del incidente</strong> puede ayudarte a investigar lo que ocurrió.</p>
-<h3>Situaciones en las que resulta útil</h3><ul><li><strong>Una eliminación inesperada.</strong> En la biblioteca, podrías buscar instrucciones DELETE sobre el catálogo y revisar la cuenta y la hora asociadas. Esa información ayuda a localizar la operación que debe investigarse.</li><li><strong>Una consulta a información sensible.</strong> En un sistema académico, puede ser necesario revisar qué cuentas consultaron una tabla de calificaciones. La auditoría aporta evidencia de los accesos que se hayan configurado para registrar.</li><li><strong>Un cambio que nadie reconoce.</strong> Si un precio cambia en una tienda, registrar las instrucciones UPDATE permite revisar cuándo se intentó modificar la tabla y desde qué cuenta. Para conocer los valores anteriores hace falta un mecanismo adicional que conserve ese historial.</li></ul>
-<h3>¿Qué ventajas obtenemos?</h3><p>Contar con registros <strong>reduce las suposiciones al investigar un problema</strong>: tenemos instrucciones, fechas y cuentas que podemos contrastar. También permite revisar si el uso de la base de datos corresponde a las responsabilidades de cada usuario y aportar evidencias cuando una organización necesita demostrar sus controles. Para que esto sea útil, alguien debe revisar los registros y conservarlos durante el tiempo necesario.</p>
-<h3>¿Qué ocurre si no tenemos auditoría?</h3><p>Podemos detectar que un dato falta o está equivocado <strong>sin disponer de evidencia suficiente</strong> para explicar el incidente. Esto retrasa la investigación, dificulta identificar la cuenta involucrada y hace más complicado distinguir un error de trabajo de un uso indebido. Además, las consultas no autorizadas pueden pasar desapercibidas si no contamos con otros controles que las detecten. Activar una auditoría después no reconstruye los eventos que nunca se registraron.</p>
-<div class="important-box"><strong>Ten presente su alcance.</strong> La auditoría ayuda a investigar; por sí sola no impide una eliminación ni recupera los datos. Seguimos necesitando permisos adecuados y copias de seguridad. Si varias personas comparten una cuenta, el registro identifica esa cuenta, pero no permite asegurar qué persona la utilizó.</div>
-<p>Auditar también tiene un costo: <strong>los archivos ocupan espacio</strong> y registrar demasiados eventos consume recursos y dificulta su revisión. Por eso <strong>elegiremos una tabla y unas pocas acciones</strong>, en lugar de intentar registrar todo lo que sucede en el servidor.</p></google-codelab-step>
-<google-codelab-step duration="12" label="Prerrequisitos">
-<p>Antes de crear la auditoría, verifica dos cosas: que <strong>el servicio de SQL Server pueda escribir sus archivos</strong> en la carpeta elegida y que puedas <strong>ejecutar lotes y leer los mensajes</strong> de SSMS. Hazlo en la misma instancia de práctica que usarás para el laboratorio.</p>
-<h3>Lo que necesitas</h3>
-<ul><li>SQL Server 2025 Developer y SQL Server Management Studio (SSMS), según el entorno de la asignatura.</li><li>Una instancia de práctica en Windows y una conexión autorizada para crear bases de datos y configurar auditorías. Para el laboratorio puede utilizarse una cuenta administradora de esa instancia.</li><li>Conocimientos básicos de SELECT, INSERT, DELETE y claves primarias.</li></ul>
-<h3>1. Identifica la cuenta del servicio</h3>
-<ol><li>En SSMS, mira el nombre del servidor al que te conectaste. Si es una <strong>instancia predeterminada</strong>, busca <code>SQL Server (MSSQLSERVER)</code>. Si te conectaste a una instancia con nombre, por ejemplo <code>.\SQLEXPRESS</code>, busca <code>SQL Server (SQLEXPRESS)</code>.</li><li>En el equipo donde funciona esa instancia, abre <strong>Administrador de configuración de SQL Server</strong> y entra en <strong>Servicios de SQL Server</strong>. Localiza el servicio anterior; no lo confundas con <em>SQL Server Agent</em> ni con <em>SQL Server Browser</em>.</li><li>Lee y anota el valor de <strong>Iniciar sesión como</strong>. Esa es la cuenta que necesita acceso a la carpeta de auditoría. Solo observa este dato; no cambies la cuenta ni detengas el servicio.</li></ol>
-<h3>2. Comprueba el acceso a la carpeta</h3>
-<ol><li>En <strong>el equipo que ejecuta SQL Server</strong>, crea <code>C:\AuditLogs\BibliotecaLab03\</code> si aún no existe. Si SSMS está conectado a otro equipo, la carpeta debe existir allí, no solo en tu computadora.</li><li>En el Explorador de archivos, haz clic derecho sobre la carpeta y entra en <strong>Propiedades → Seguridad → Opciones avanzadas → Acceso efectivo</strong>. Selecciona la cuenta que anotaste y consulta su acceso efectivo. Según la versión de Windows, el botón puede llamarse <em>Seleccionar un usuario</em> y luego <em>Ver acceso efectivo</em>.</li><li>Comprueba que tenga permiso para <strong>crear archivos y escribir datos</strong> en la carpeta. Si Windows no puede calcular el acceso efectivo, revisa en la pestaña <strong>Seguridad</strong> los permisos asignados directamente a la cuenta o a un grupo al que pertenezca. Si no puedes confirmarlo con tu usuario, registra el nombre de la cuenta y el resultado mostrado para revisarlo con el docente.</li></ol>
-<div class="important-box"><strong>Ejemplo.</strong> Si trabajas con la instancia predeterminada y ves <code>NT SERVICE\MSSQLSERVER</code> en «Iniciar sesión como», comprueba el acceso de esa cuenta a <code>C:\AuditLogs\BibliotecaLab03\</code>. Para una instancia con nombre, usa exactamente la cuenta que muestre tu servicio; puede ser diferente. La comprobación final será que, al activar la auditoría más adelante, aparezcan archivos <code>.sqlaudit</code> en esa carpeta.</div>
-<h3>3. Prueba SSMS, «Resultados», «Mensajes» y GO</h3>
-<ol><li>En SSMS, selecciona tu conexión y haz clic en <strong>Nueva consulta</strong>.</li><li>Copia el ejemplo completo de abajo y ejecútalo con <strong>Ejecutar</strong> o <strong>F5</strong>. No altera ninguna tabla.</li><li>Abre la pestaña <strong>Mensajes</strong>: debe aparecer <code>Lote 1 ejecutado</code>. Luego abre <strong>Resultados</strong>: la columna <code>BaseActual</code> debe mostrar <code>master</code>.</li></ol>
-<div class="code-container"><div class="code-toolbar"><span class="code-language">SQL</span><button class="copy-btn" onclick="copyCode(this)">Copiar</button></div><pre class="prettyprint lang-sql"><code class="language-sql">USE master;
-
-PRINT N'Lote 1 ejecutado';
+<link href="assets/fonts.css" rel="stylesheet"/>
+<link href="assets/codelab-elements.css" rel="stylesheet"/>
+<link href="assets/prettify.css" rel="stylesheet"/>
+<link href="styles.css" rel="stylesheet"/>
+</head>
+<body><google-codelab environment="web" id="g03" title="Laboratorio 3 — Auditoría de bases de datos en SQL Server">
+<google-codelab-step duration="5" label="Introducción"><h2>Auditoría de bases de datos</h2><p><strong>Administración de Bases de Datos · Ciclo 02-2026 · Laboratorio 3 · Versión 1</strong></p>
+<p>En una base de datos, los permisos indican qué operaciones puede realizar una cuenta. La auditoría permite conservar evidencia de las acciones que se hayan elegido para registrar. En este laboratorio configurarás SQL Audit y revisarás los eventos que produce una pequeña aplicación universitaria.</p>
+<p>Imagina que el área académica administra reservas de salas de cómputo. Una reserva se consulta, otra se agrega y un registro de prueba se retira. Utilizaremos <strong>datos completamente ficticios</strong> en una base de práctica para seguir estas acciones y aprender a interpretar los registros.</p>
+<h3>Al finalizar podrás</h3><ul><li>Distinguir la auditoría de servidor de la especificación de auditoría de base de datos.</li><li>Registrar <code>SELECT</code>, <code>INSERT</code> y <code>DELETE</code> sobre una tabla.</li><li>Identificar en un evento su fecha, cuenta, objeto e instrucción.</li></ul>
+<div class="important-box"><strong>Idea central.</strong> Proteger las cuentas, asignar permisos y auditar acciones son controles que se complementan. La auditoría aporta evidencia para investigar; no reemplaza los permisos ni las copias de seguridad.</div></google-codelab-step><google-codelab-step duration="7" label="¿Por qué necesitamos auditar?"><p>Supón que desaparece una reserva de una sala de cómputo. Consultar la tabla confirma que ya no está, pero no explica qué instrucción produjo el cambio. Si la auditoría estaba activa, sus registros pueden ayudarte a ubicar un <code>DELETE</code>, la cuenta asociada y el momento en que ocurrió.</p>
+<h3>Cuándo ayuda</h3><ul><li><strong>Una eliminación inesperada:</strong> permite localizar la operación que debe investigarse.</li><li><strong>Una consulta a datos sensibles:</strong> permite revisar qué cuentas accedieron a una tabla cuando se configuró el registro de esa acción.</li><li><strong>Un cambio discutido:</strong> aporta una instrucción y una hora que pueden contrastarse con otras evidencias.</li></ul>
+<p><strong>Contar con registros reduce las suposiciones</strong> durante una investigación. Sin una auditoría configurada de antemano, puede ser difícil reconstruir qué cuenta ejecutó una instrucción. Activarla después de un incidente no recupera eventos anteriores.</p>
+<div class="important-box"><strong>Ten presente su alcance.</strong> Auditar no impide una operación ni restaura los datos. Un registro identifica la cuenta utilizada, pero si varias personas comparten esa cuenta no demuestra cuál de ellas actuó.</div>
+<p>Registrar cada acción ocupa espacio y hace más lenta la revisión. Por eso, en este ejercicio observaremos solo una tabla y tres operaciones.</p></google-codelab-step><google-codelab-step duration="5" label="Prerrequisitos"><p>Necesitas una instancia de práctica de SQL Server, SSMS y una conexión autorizada para crear una base de datos y configurar auditorías.</p>
+<h3>Prepara la carpeta de registros</h3><ol><li>En el equipo donde se ejecuta SQL Server, crea <code>C:\AuditLogs\ReservasLab03\</code>. Si te conectas a un servidor remoto, la carpeta debe existir <strong>en ese servidor</strong>.</li><li>Abre <strong>Administrador de configuración de SQL Server → Servicios de SQL Server</strong>. Busca el servicio del motor de tu instancia, por ejemplo <code>SQL Server (MSSQLSERVER)</code>, y anota su valor en <strong>Iniciar sesión como</strong>. Evita confundirlo con SQL Server Agent.</li><li>En la carpeta, entra en <strong>Propiedades → Seguridad → Opciones avanzadas → Acceso efectivo</strong> y comprueba si esa cuenta puede crear archivos y escribir datos. Si no puedes confirmarlo con tu usuario, anota la cuenta y el resultado para revisarlo con el docente. Más adelante podrás verificar el acceso cuando aparezcan los archivos <code>.sqlaudit</code>.</li></ol>
+<p>Si usas SQL Server dentro de un contenedor, sustituye la ruta de Windows por una <strong>carpeta disponible dentro del contenedor</strong> y con permisos de escritura. Utiliza la misma ruta en <code>CREATE SERVER AUDIT</code> y en <code>sys.fn_get_audit_file</code>.</p>
+<div class="important-box"><strong>Antes de continuar.</strong> Comprueba que no existan objetos anteriores llamados <code>ReservasLab03</code>, <code>AuditoriaReservas</code> o <code>AuditoriaReservasDB</code> en tu instancia. Si ya empezaste el ejercicio, continúa desde el punto correspondiente y evita repetir las inserciones.</div></google-codelab-step><google-codelab-step duration="8" label="Conoce los comandos de SQL Audit"><p>Para que un evento termine en un archivo de auditoría se necesitan dos decisiones: <strong>dónde guardarlo</strong> y <strong>qué acciones observar</strong>. Estos son los comandos que utilizarás.</p>
+<table><thead><tr><th>Elemento</th><th>Función</th><th>En este ejercicio</th></tr></thead><tbody><tr><td><code>CREATE SERVER AUDIT</code></td><td>Define el destino de los eventos.</td><td>Archivos <code>.sqlaudit</code> en una carpeta del servidor.</td></tr><tr><td><code>ALTER SERVER AUDIT ... STATE = ON</code></td><td>Activa la auditoría de servidor.</td><td>Permite comenzar a escribir eventos.</td></tr><tr><td><code>CREATE DATABASE AUDIT SPECIFICATION</code></td><td>Elige acciones, objeto y usuarios cuyos eventos se registrarán.</td><td><code>SELECT</code>, <code>INSERT</code> y <code>DELETE</code> en <code>dbo.ReservasLaboratorio</code>.</td></tr><tr><td><code>sys.fn_get_audit_file</code></td><td>Lee los archivos como filas de una consulta.</td><td>Mostrará hora, cuenta, objeto e instrucción.</td></tr></tbody></table>
+<p>La especificación de la base de datos se vincula a una auditoría de servidor existente. <strong>Ambos objetos deben estar activos</strong> cuando ejecutes las acciones que deseas registrar. <code>GO</code> separa los lotes enviados por SSMS; no es una instrucción T-SQL del motor.</p>
+<p>SQL Audit puede observar eventos de servidor, como inicios de sesión y cambios de configuración, o acciones sobre objetos de una base de datos. También admite destinos en los registros <em>Application</em> y <em>Security</em> de Windows. Aquí usaremos archivos para consultarlos con T-SQL.</p>
+<p><code>BY public</code> incluye a los usuarios de la base en el alcance de la especificación. <strong>No les concede permisos</strong> sobre la tabla: esos permisos se administran por separado. Las opciones <code>CHECK_POLICY</code> y <code>CHECK_EXPIRATION</code> protegen inicios de sesión de SQL Server y pertenecen a otra configuración.</p>
+<div class="important-box"><strong>Antes de ejecutar un bloque:</strong> identifica qué objeto crea o cambia y revisa los mensajes de SSMS. Si aparece un error, resuélvelo antes de continuar.</div></google-codelab-step><google-codelab-step duration="20" label="Configura una auditoría de ejemplo"><h3>1. Creación de la base de datos</h3>
+<p><code>ReservasLab03</code> será una base independiente con reservas ficticias de salas de cómputo. <code>IdReserva</code> identifica cada fila; la fecha, el turno y el estado describen la reserva. La fila <code>999</code> es un registro de prueba y la retiraremos después de activar la auditoría.</p><div class="code-container"><div class="code-toolbar"><span class="code-language">SQL</span><button class="copy-btn" onclick="copyCode(this)">Copiar</button></div><pre class="prettyprint lang-sql"><code class="language-sql">USE master;
 GO
 
-SELECT DB_NAME() AS BaseActual;
-GO</code></pre></div>
-<p><code>GO</code> indica a SSMS dónde termina un lote y comienza el siguiente; <strong>no es una instrucción T-SQL del motor</strong>. Aquí, <code>USE</code> y <code>PRINT</code> forman el primer lote, mientras que <code>SELECT</code> pertenece al segundo. Si aparece un error en «Mensajes», lee su número y texto antes de seguir con la guía.</p>
-<div class="important-box"><strong>Antes de empezar.</strong> En la práctica usaremos <code>BibliotecaLab03</code>, <code>AuditoriaBiblioteca</code> y <code>AuditoriaBibliotecaDB</code>. Si ya creaste estos objetos, comprueba en qué paso quedaste antes de repetir instrucciones. En Linux o Docker, la ruta y los permisos deben corresponder al servidor o contenedor.</div>
-</google-codelab-step>
-<google-codelab-step duration="20" label="Práctica guiada"><h3>1. Preparar los datos</h3><p>La biblioteca necesita un catálogo pequeño para esta prueba. Cada libro tendrá un identificador, un título y un precio de referencia para su reposición. <code>Id</code> es la clave primaria: nos permitirá seleccionar una ficha sin depender de su título. Usamos <code>DECIMAL(10,2)</code> para guardar el precio con dos decimales. Los datos son ficticios y solo se utilizarán en el laboratorio.</p><div class="code-container"><div class="code-toolbar"><span class="code-language">SQL</span><button class="copy-btn" onclick="copyCode(this)">Copiar</button></div><pre class="prettyprint lang-sql"><code class="language-sql">USE master;
+CREATE DATABASE ReservasLab03;
 GO
 
-CREATE DATABASE BibliotecaLab03;
+USE ReservasLab03;
 GO
 
-USE BibliotecaLab03;
-GO
-
--- Cada fila representa una ficha del catálogo.
-CREATE TABLE dbo.Libros (
-    Id INT PRIMARY KEY,
-    Titulo NVARCHAR(100) NOT NULL,
-    PrecioReferencia DECIMAL(10,2) NOT NULL
+-- Datos ficticios de reservas de salas de cómputo.
+CREATE TABLE dbo.ReservasLaboratorio (
+    IdReserva INT PRIMARY KEY,
+    Sala NVARCHAR(50) NOT NULL,
+    FechaReserva DATE NOT NULL,
+    Turno NVARCHAR(20) NOT NULL,
+    Estado NVARCHAR(20) NOT NULL
 );
 
--- La primera ficha está duplicada en otro catálogo y se retirará.
-INSERT INTO dbo.Libros (Id, Titulo, PrecioReferencia)
-VALUES (1, N'Introducción a la programación (ficha duplicada)', 25.00),
-       (2, N'Fundamentos de bases de datos', 32.50);
+INSERT INTO dbo.ReservasLaboratorio
+    (IdReserva, Sala, FechaReserva, Turno, Estado)
+VALUES (1, N'Sala de cómputo A', '2026-10-06', N'Mañana', N'Pendiente'),
+       (2, N'Sala de cómputo B', '2026-10-06', N'Tarde', N'Confirmada'),
+       (999, N'Sala de cómputo A', '2026-10-06', N'Mañana', N'Registro de prueba');
 GO</code></pre></div>
-<div class="important-box"><p><strong>Antes de seguir:</strong> deberías tener la base <code>BibliotecaLab03</code> y dos filas en <code>dbo.Libros</code>. Todavía no estamos auditando esta tabla. Las inserciones de este primer bloque preparan el escenario; los eventos que revisaremos se generarán después de activar la auditoría.</p></div>
-<h3>2. Configurar y activar la auditoría</h3><p>Vamos a separar dos decisiones: <strong>dónde guardar la evidencia y qué operaciones registrar</strong>. Primero crearemos una auditoría de servidor que escriba en archivos. Luego, dentro de nuestra base de datos, crearemos una especificación que vincule esa auditoría con las acciones sobre el catálogo.</p>
-<table><thead><tr><th>Componente</th><th>Función en la práctica</th></tr></thead><tbody><tr><td>Server Audit</td><td><code>AuditoriaBiblioteca</code> define el destino de los registros: archivos.</td></tr><tr><td>Database Audit Specification</td><td><code>AuditoriaBibliotecaDB</code> selecciona las acciones y la tabla que se auditarán.</td></tr><tr><td>Acciones de auditoría</td><td>SELECT, INSERT y DELETE: lectura, inserción y eliminación.</td></tr></tbody></table><div class="code-container"><div class="code-toolbar"><span class="code-language">SQL</span><button class="copy-btn" onclick="copyCode(this)">Copiar</button></div><pre class="prettyprint lang-sql"><code class="language-sql">USE master;
+<div class="important-box"><strong>Comprueba el primer paso.</strong> La tabla <code>ReservasLab03.dbo.ReservasLaboratorio</code> debe contener tres filas. Las dos primeras representan reservas válidas y la tercera está marcada como prueba. Todavía no hay una especificación activa para registrar estas inserciones.</div>
+<h3>2. Creación y activación de la auditoría</h3><p>Ahora define el destino en el servidor y, dentro de la base, las acciones que quieres observar. Fíjate en que el objeto de servidor y la especificación terminan activados.</p><div class="code-container"><div class="code-toolbar"><span class="code-language">SQL</span><button class="copy-btn" onclick="copyCode(this)">Copiar</button></div><pre class="prettyprint lang-sql"><code class="language-sql">USE master;
 GO
 
--- Define dónde se guardarán los eventos.
-CREATE SERVER AUDIT AuditoriaBiblioteca
+-- El objeto de servidor define dónde quedarán los eventos.
+CREATE SERVER AUDIT AuditoriaReservas
 TO FILE (
-    FILEPATH = N'C:\AuditLogs\BibliotecaLab03\',
+    FILEPATH = N'C:\AuditLogs\ReservasLab03\',
     MAXSIZE = 10 MB,
     MAX_FILES = 5
 )
 WITH (QUEUE_DELAY = 1000, ON_FAILURE = CONTINUE);
 GO
 
--- Crear el objeto no lo activa: es necesario encenderlo.
-ALTER SERVER AUDIT AuditoriaBiblioteca WITH (STATE = ON);
+ALTER SERVER AUDIT AuditoriaReservas WITH (STATE = ON);
 GO
 
-USE BibliotecaLab03;
+USE ReservasLab03;
 GO
 
--- Define qué acciones se registrarán y sobre qué tabla.
-CREATE DATABASE AUDIT SPECIFICATION AuditoriaBibliotecaDB
-FOR SERVER AUDIT AuditoriaBiblioteca
-ADD (SELECT, INSERT, DELETE ON OBJECT::dbo.Libros BY public)
+-- La especificación elige las acciones sobre la tabla.
+CREATE DATABASE AUDIT SPECIFICATION AuditoriaReservasDB
+FOR SERVER AUDIT AuditoriaReservas
+ADD (SELECT, INSERT, DELETE ON OBJECT::dbo.ReservasLaboratorio BY public)
 WITH (STATE = ON);
 GO</code></pre></div>
-<p>Observa la cláusula <code>BY public</code>: permite incluir las acciones de los usuarios de la base, ya que todos pertenecen a ese rol. Esto <strong>no les otorga permiso</strong> para consultar o modificar los libros; esos permisos se administran por separado. También fíjate en <code>STATE = ON</code>: crear los objetos no basta, necesitamos que tanto la auditoría como su especificación estén activas.</p>
-<p>Los archivos de esta práctica serán pequeños: <code>MAXSIZE</code> fija 10 MB por archivo y <code>MAX_FILES</code> establece un límite de cinco archivos; no borra los anteriores de forma automática. <code>QUEUE_DELAY = 1000</code> configura un intervalo de hasta un segundo para entregar los eventos. Si consultas inmediatamente, quizá necesites esperar y volver a leerlos.</p><p>Con <code>ON_FAILURE = CONTINUE</code>, las operaciones pueden continuar si falla la escritura de la auditoría. Esto facilita la práctica, pero también explica por qué debemos comprobar que los archivos realmente se estén generando y revisar el espacio disponible.</p>
-<div class="important-box"><strong>Comprobación:</strong> en el Explorador de objetos de SSMS, actualiza <em>Seguridad → Auditorías</em> del servidor y <em>BibliotecaLab03 → Seguridad → Especificaciones de auditoría de base de datos</em>. Deben aparecer los objetos creados y estar habilitados. Si hay un error de ruta o permisos, resuélvelo antes de continuar.</div></google-codelab-step>
-<google-codelab-step duration="15" label="Comprobación de la auditoría"><h3>1. Generar acciones</h3><p>Ahora vas a simular una revisión del catálogo: primero consultarás los libros, después agregarás un título y finalmente retirarás la ficha duplicada. Antes de ejecutar el DELETE, observa su condición <code>WHERE Id = 1</code>: es la que limita la eliminación a esa ficha. Ejecuta el bloque una sola vez para que las claves y los datos coincidan con el resultado esperado.</p><div class="code-container"><div class="code-toolbar"><span class="code-language">SQL</span><button class="copy-btn" onclick="copyCode(this)">Copiar</button></div><pre class="prettyprint lang-sql"><code class="language-sql">USE BibliotecaLab03;
+<p><code>MAXSIZE = 10 MB</code> limita cada archivo y <code>MAX_FILES = 5</code> limita la cantidad de archivos sin eliminar automáticamente los anteriores. <code>QUEUE_DELAY = 1000</code> permite un pequeño retraso en la escritura. Con <code>ON_FAILURE = CONTINUE</code>, las operaciones pueden continuar si falla el registro; por eso comprobarás que los archivos se generen.</p>
+<div class="important-box"><strong>Comprueba el segundo paso.</strong> Actualiza el Explorador de objetos de SSMS. Busca <code>AuditoriaReservas</code> en <em>Seguridad → Auditorías</em> del servidor y <code>AuditoriaReservasDB</code> en <em>ReservasLab03 → Seguridad → Especificaciones de auditoría de base de datos</em>. Ambos objetos deben estar habilitados.</div></google-codelab-step><google-codelab-step duration="15" label="Comprueba los eventos registrados"><h3>1. Genera las acciones</h3><p>Consulta las reservas, registra una nueva y retira el registro de prueba. Antes del <code>DELETE</code>, verifica que su condición seleccione solo <code>IdReserva = 999</code>. Ejecuta el bloque una vez.</p><div class="code-container"><div class="code-toolbar"><span class="code-language">SQL</span><button class="copy-btn" onclick="copyCode(this)">Copiar</button></div><pre class="prettyprint lang-sql"><code class="language-sql">USE ReservasLab03;
 GO
 
--- Consultar el catálogo antes de modificarlo.
-SELECT Id, Titulo, PrecioReferencia FROM dbo.Libros;
+-- Revisa las reservas antes de modificar la copia de trabajo.
+SELECT IdReserva, Sala, FechaReserva, Turno, Estado
+FROM dbo.ReservasLaboratorio
+ORDER BY IdReserva;
 
--- Registrar un nuevo título.
-INSERT INTO dbo.Libros (Id, Titulo, PrecioReferencia)
-VALUES (3, N'Redes de computadoras', 40.00);
+-- Registra una nueva reserva.
+INSERT INTO dbo.ReservasLaboratorio
+    (IdReserva, Sala, FechaReserva, Turno, Estado)
+VALUES (3, N'Sala de cómputo C', '2026-10-07', N'Mañana', N'Pendiente');
 
--- Retirar únicamente la ficha duplicada.
-DELETE FROM dbo.Libros WHERE Id = 1;
+-- Retira únicamente el registro de prueba.
+DELETE FROM dbo.ReservasLaboratorio
+WHERE IdReserva = 999;
 
--- Revisar cómo quedó el catálogo.
-SELECT Id, Titulo, PrecioReferencia FROM dbo.Libros ORDER BY Id;
+-- Comprueba el estado final de las reservas.
+SELECT IdReserva, Sala, FechaReserva, Turno, Estado
+FROM dbo.ReservasLaboratorio
+ORDER BY IdReserva;
 GO</code></pre></div>
-<div class="important-box"><p><strong>Revisa el resultado:</strong> el primer SELECT debe mostrar las dos fichas iniciales. En el último deben quedar <em>Fundamentos de bases de datos</em> (Id 2, 32.50) y <em>Redes de computadoras</em> (Id 3, 40.00). Hasta aquí comprobaste los datos; ahora vamos a buscar la evidencia de las instrucciones que ejecutaste.</p></div>
-<h3>2. Leer las evidencias</h3><p>SQL Server guarda los eventos en archivos <code>.sqlaudit</code>. La función <code>sys.fn_get_audit_file</code> permite <strong>leerlos como filas de una consulta</strong>. El asterisco de la ruta incluye los archivos de esa carpeta, y los filtros dejan solo los eventos de nuestra tabla. Usa la conexión administradora de la práctica; en SQL Server 2025, una cuenta sin ese privilegio necesita <code>VIEW SERVER SECURITY AUDIT</code> para consultar esta función.</p><div class="code-container"><div class="code-toolbar"><span class="code-language">SQL</span><button class="copy-btn" onclick="copyCode(this)">Copiar</button></div><pre class="prettyprint lang-sql"><code class="language-sql">USE master;
+<div class="important-box"><strong>Revisa el resultado.</strong> El último <code>SELECT</code> debe mostrar las reservas <code>1</code>, <code>2</code> y <code>3</code>. La fila de prueba <code>999</code> ya no debe aparecer. La reserva nueva corresponde a la Sala de cómputo C.</div>
+<h3>2. Lee la evidencia</h3><p><code>sys.fn_get_audit_file</code> abre los archivos <code>.sqlaudit</code> y devuelve los eventos como filas. Los filtros dejan solo los de la tabla del ejercicio. Usa una conexión administradora de la práctica; en SQL Server 2025 una cuenta sin ese privilegio necesita <code>VIEW SERVER SECURITY AUDIT</code> para consultar la función.</p><div class="code-container"><div class="code-toolbar"><span class="code-language">SQL</span><button class="copy-btn" onclick="copyCode(this)">Copiar</button></div><pre class="prettyprint lang-sql"><code class="language-sql">USE master;
 GO
 
 SELECT event_time, action_id, succeeded,
        server_principal_name, database_name,
        schema_name, object_name, statement
 FROM sys.fn_get_audit_file(
-    N'C:\AuditLogs\BibliotecaLab03\*.sqlaudit', DEFAULT, DEFAULT)
-WHERE database_name = N'BibliotecaLab03'
+    N'C:\AuditLogs\ReservasLab03\*.sqlaudit', DEFAULT, DEFAULT)
+WHERE database_name = N'ReservasLab03'
   AND schema_name = N'dbo'
-  AND object_name = N'Libros'
+  AND object_name = N'ReservasLaboratorio'
 ORDER BY event_time DESC;
 GO</code></pre></div>
-<table><thead><tr><th>Campo</th><th>Cómo interpretarlo</th></tr></thead><tbody><tr><td>event_time</td><td>Fecha y hora del evento en UTC; puede diferir de la hora local.</td></tr><tr><td>action_id</td><td>Identificador de la acción registrada. Relaciónalo con el texto de la instrucción.</td></tr><tr><td>server_principal_name</td><td>Principal de servidor asociado a la ejecución.</td></tr><tr><td>database_name / schema_name / object_name</td><td>Base de datos, esquema y objeto al que se accedió.</td></tr><tr><td>statement</td><td>Texto de la instrucción registrada.</td></tr><tr><td>succeeded</td><td>Para estas acciones, indica si pasó la comprobación de permisos; no demuestra que la transacción se haya confirmado ni cuántas filas cambió.</td></tr></tbody></table>
-<p>Empieza por la columna <code>statement</code> y busca el INSERT que agregó el libro. Luego revisa su hora y la cuenta asociada; haz lo mismo con el DELETE. Si utilizaste una sola conexión durante la práctica, es normal que aparezca la misma cuenta en ambos eventos. Puedes encontrar más filas de las que esperabas si repetiste consultas o ya habías realizado otras pruebas.</p><p>Cuando leas <code>succeeded = 1</code>, recuerda que para estas acciones significa que <strong>se superó la comprobación de permisos</strong>. Por ejemplo, un DELETE con una condición que no encuentre filas puede superar esa comprobación y no eliminar nada. Por eso revisamos tanto el registro de auditoría como el estado de la tabla. SQL Audit tampoco conserva automáticamente los valores anteriores y posteriores de cada fila.</p>
-<div class="important-box"><strong>¿La consulta no devuelve filas?</strong> Espera unos segundos y ejecútala de nuevo. Si sigue vacía, comprueba en este orden: que los dos objetos estén habilitados, que hayas realizado las operaciones después de activarlos y que la ruta permita escribir al servicio de SQL Server. Revisa también que los nombres de la base, el esquema y la tabla coincidan con los filtros.</div></google-codelab-step>
-<google-codelab-step duration="10" label="Buenas prácticas y ejercicio propuesto"><h3>Buenas prácticas</h3><ul><li>Audita acciones y objetos relevantes: registrar todo aumenta el volumen y dificulta la revisión.</li><li>Restringe el acceso a los archivos, revisa su espacio disponible y define su conservación. Los registros pueden contener información sensible.</li><li>Aplica el mínimo privilegio: la cuenta administradora facilita este laboratorio, pero no debe ser la conexión habitual de una aplicación.</li></ul>
-<h3>Ejercicio propuesto</h3><p>La biblioteca recibió una nueva cotización y necesita ajustar el precio de referencia del libro <em>Fundamentos de bases de datos</em>. Hasta ahora elegimos SELECT, INSERT y DELETE, por lo que aún falta incluir UPDATE. Usa lo que acabas de practicar para ampliar la configuración y dejar evidencia de este cambio.</p><ol><li>Desactiva temporalmente <code>AuditoriaBibliotecaDB</code> con <code>ALTER DATABASE AUDIT SPECIFICATION ... WITH (STATE = OFF)</code>.</li><li>Agrega la acción <code>UPDATE</code> sobre <code>OBJECT::dbo.Libros</code> para <code>public</code>, mediante <code>ALTER DATABASE AUDIT SPECIFICATION ... ADD (...)</code>. Vuelve a activar la especificación.</li><li>Cambia únicamente el <code>PrecioReferencia</code> del libro con <code>Id = 2</code> a 35.00. Comprueba el nuevo valor con SELECT y busca la instrucción UPDATE en los registros de auditoría.</li></ol>
-<div class="important-box"><p><strong>Para entregar:</strong> guarda el SQL que utilizaste y dos capturas: una con el catálogo actualizado y otra con el evento UPDATE. Acompáñalas con una explicación breve de cómo relacionaste ese evento con tu cambio. Explica también qué configura la auditoría de servidor, qué configura la especificación de la base y por qué <code>succeeded = 1</code> no indica cuántas filas se modificaron.</p></div>
-<div class="important-box"><p><strong>Al terminar:</strong> si el docente indica detener la práctica, desactiva primero la especificación y después la auditoría de servidor con <code>STATE = OFF</code>. Conserva los archivos hasta entregar las evidencias.</p></div></google-codelab-step>
-<google-codelab-step duration="0" label="Créditos"><table><tbody><tr><th>Guía</th><td>Laboratorio 3 — Auditoría de bases de datos en SQL Server</td></tr><tr><th>Ciclo</th><td>02-2026</td></tr><tr><th>Versión</th><td>1</td></tr><tr><th>Autor</th><td>Diego Eduardo Castro Quintanilla</td></tr></tbody></table>
-<p>Material de refuerzo alineado con la clase <em>Perfiles y políticas de seguridad</em> y con el tema de auditoría del plan de asignatura.</p>
-<h3>Documentación de consulta</h3><ul><li><a href="https://learn.microsoft.com/es-es/sql/t-sql/statements/create-server-audit-transact-sql?view=sql-server-ver17">Microsoft Learn: CREATE SERVER AUDIT</a>.</li><li><a href="https://learn.microsoft.com/es-es/sql/t-sql/statements/create-database-audit-specification-transact-sql?view=sql-server-ver17">Microsoft Learn: CREATE DATABASE AUDIT SPECIFICATION</a>.</li><li><a href="https://learn.microsoft.com/es-es/sql/relational-databases/system-functions/sys-fn-get-audit-file-transact-sql?view=sql-server-ver17">Microsoft Learn: sys.fn_get_audit_file</a>.</li></ul>
-<p><img alt="Licencia Creative Commons" src="img/license.jpg"/><br/>Esta obra está bajo una licencia <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/">Creative Commons Atribución-NoComercial-CompartirIgual 4.0 Internacional</a>.</p></google-codelab-step>
-</google-codelab><script>function copyCode(button) {
-  const code = button.closest('.code-container').querySelector('code').innerText;
-  navigator.clipboard.writeText(code).then(function () {
-    button.textContent = 'Copiado';
-    setTimeout(function () { button.textContent = 'Copiar'; }, 2000);
-  }).catch(function () { button.textContent = 'Selecciona y copia el código'; });
-}</script><script src="assets/native-shim.js"></script><script src="assets/custom-elements.min.js"></script>
-<script src="assets/prettify.js"></script><script src="assets/codelab-elements.js"></script></body></html>
+<table><thead><tr><th>Campo</th><th>Cómo leerlo</th></tr></thead><tbody><tr><td><code>event_time</code></td><td>Hora del evento en UTC.</td></tr><tr><td><code>action_id</code></td><td>Identificador de la acción.</td></tr><tr><td><code>server_principal_name</code></td><td>Cuenta de servidor asociada.</td></tr><tr><td><code>database_name</code>, <code>schema_name</code>, <code>object_name</code></td><td>Base, esquema y tabla.</td></tr><tr><td><code>statement</code></td><td>Instrucción registrada.</td></tr><tr><td><code>succeeded</code></td><td>Para estas acciones indica el resultado de la comprobación de permisos; no dice cuántas filas cambiaron.</td></tr></tbody></table>
+<p>Busca el <code>INSERT</code> de la reserva <code>3</code> y el <code>DELETE</code> de la <code>999</code>. Después revisa la hora y la cuenta. Puede haber más eventos si repetiste consultas. <strong>El registro y el estado final de la tabla responden preguntas distintas</strong>: SQL Audit no conserva automáticamente una copia anterior y posterior de cada fila.</p>
+<div class="important-box"><strong>¿No aparecen eventos?</strong> Espera unos segundos y consulta otra vez. Comprueba que los dos objetos estén activos, que las acciones se hayan ejecutado después de activarlos y que el servicio pueda escribir en la carpeta.</div></google-codelab-step><google-codelab-step duration="15" label="Ejercicio guiado"><p>Resuelve estas <strong>cinco tareas</strong> sobre la base <code>ReservasLab03</code>. Guarda el SQL que utilices y comprueba cada resultado antes de continuar. Las salas, fechas y reservas del ejercicio son ficticias.</p>
+<ol><li><strong>Consulta focalizada.</strong> Muestra las reservas de la Sala de cómputo A. Localiza el evento <code>SELECT</code> correspondiente.</li><li><strong>Nueva reserva.</strong> Agrega la reserva <code>4</code> para la Sala de cómputo B, el <code>2026-10-07</code>, en turno de mañana y estado <code>Pendiente</code>. Comprueba la fila y busca el evento <code>INSERT</code>.</li><li><strong>Corrección de un registro temporal.</strong> Inserta una reserva de prueba con <code>IdReserva = 998</code> y estado <code>Registro de prueba</code>. Elimínala usando <code>WHERE IdReserva = 998</code>. Identifica los eventos de ambas operaciones y confirma que las reservas válidas siguen presentes.</li><li><strong>Amplía la auditoría.</strong> Desactiva <code>AuditoriaReservasDB</code>, agrega <code>UPDATE</code> sobre <code>OBJECT::dbo.ReservasLaboratorio</code> para <code>public</code> con <code>ALTER DATABASE AUDIT SPECIFICATION</code> y vuelve a activarla. Cambia solo el <code>Estado</code> de la reserva <code>1</code> a <code>Confirmada</code>. Verifica la fila y localiza el evento <code>UPDATE</code>.</li><li><strong>Explica la evidencia.</strong> Escoge dos eventos distintos e indica qué cuenta, tabla, instrucción y hora aparecen. Explica por qué <code>succeeded = 1</code> no indica cuántas filas modificó una instrucción.</li></ol>
+<div class="important-box"><strong>Entrega.</strong> Incluye tu SQL, una captura del estado final de la tabla y otra de los eventos que analizaste. Acompáñalas con respuestas breves. Si una instrucción falla, registra el mensaje y cómo lo resolviste.</div>
+<p>Conserva los archivos de auditoría hasta entregar tus evidencias. Si se indica detener la práctica, desactiva primero la especificación y después la auditoría de servidor con <code>STATE = OFF</code>.</p></google-codelab-step><google-codelab-step duration="0" label="Créditos"><p>Departamento de Electrónica e Informática, Universidad Centroamericana José Simeón Cañas, La Libertad, El Salvador.</p><p><strong>Versión de este documento:</strong> Versión 1, 2026.</p>
+<table><tbody><tr><td><strong>Versión</strong></td><td><strong>Autores</strong></td></tr><tr><td>1</td><td>Diego Eduardo Castro Quintanilla (00117322@uca.edu.sv)</td></tr></tbody></table>
+<p>Los datos de reservas y salas empleados en la guía son ficticios y se usan únicamente para practicar SQL Audit.</p>
+<p>Documentación de consulta: <a href="https://learn.microsoft.com/es-es/sql/t-sql/statements/create-server-audit-transact-sql?view=sql-server-ver17">CREATE SERVER AUDIT</a>, <a href="https://learn.microsoft.com/es-es/sql/t-sql/statements/create-database-audit-specification-transact-sql?view=sql-server-ver17">CREATE DATABASE AUDIT SPECIFICATION</a> y <a href="https://learn.microsoft.com/es-es/sql/relational-databases/system-functions/sys-fn-get-audit-file-transact-sql?view=sql-server-ver17">sys.fn_get_audit_file</a>.</p>
+<p><img alt="license" src="img/license.jpg"/><br/>This work is licensed under a <a href="http://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank">Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License</a>.</p></google-codelab-step></google-codelab>
+<script>function copyCode(button) {
+      const code = button.closest('.code-container').querySelector('code').innerText;
+      navigator.clipboard.writeText(code).then(function () {
+        button.textContent = 'Copiado';
+        setTimeout(function () { button.textContent = 'Copiar'; }, 2000);
+      }).catch(function () { button.textContent = 'Selecciona y copia el código'; });
+    }</script>
+<script src="assets/native-shim.js"></script>
+<script src="assets/custom-elements.min.js"></script>
+<script src="assets/prettify.js"></script>
+<script src="assets/codelab-elements.js"></script>
+</body>
+</html>
