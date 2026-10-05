@@ -1,0 +1,7 @@
+Google Codelabs assets bundled locally for these guides (verified 2026-09-24).
+Codelab CSS/JS and polyfills: https://codelabs-preview.appspot.com/libs/
+Roboto and Material Icons: https://fonts.googleapis.com/ and https://fonts.gstatic.com/
+Codelab tools source and Apache 2.0 license: https://github.com/googlecodelabs/tools
+Roboto license: https://github.com/google/fonts/tree/main/ofl/roboto
+Material Icons license: https://github.com/google/material-design-icons
+The HTML files use these local assets so they do not depend on the remote server at viewing time.
