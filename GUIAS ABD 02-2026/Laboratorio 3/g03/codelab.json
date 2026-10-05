@@ -4,7 +4,7 @@
   "prefix": "https://storage.googleapis.com",
   "updated": "2026-09-24T16:41:45.239768-06:00",
   "id": "g03",
-  "duration": 75,
+  "duration": 78,
   "title": "Laboratorio 3 — Auditoría de bases de datos en SQL Server",
   "summary": "Configuración y análisis de SQL Audit con reservas ficticias de salas de cómputo. Ciclo 02-2026, versión 1.",
   "source": ".\\G03.md",

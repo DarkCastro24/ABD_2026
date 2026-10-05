@@ -8,3 +8,4 @@ table{width:100%;border-collapse:collapse}th,td{padding:8px;text-align:left;vert
 .code-container pre code,.code-container pre code *{color:#f4f6f8!important;text-shadow:none!important}
 
 .important-box>p{margin:0}
+google-codelab-step pre,google-codelab-step code{font-family:'Source Code Pro',Consolas,'Cascadia Mono',Menlo,'Courier New',monospace}

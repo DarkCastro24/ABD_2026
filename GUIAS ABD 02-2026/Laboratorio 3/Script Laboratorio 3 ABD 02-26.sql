@@ -1,7 +1,9 @@
 ﻿-- Laboratorio 3 | Ciclo 02-2026 | Versión 1
 -- Autor: Diego Eduardo Castro Quintanilla
 -- Reservas ficticias de salas de cómputo universitarias.
--- Requiere C:\AuditLogs\ReservasLab03\ en el servidor y permisos de escritura del servicio.
+-- Entorno: contenedor Docker sqlserver-2025 (SSMS: localhost,1434, login sa).
+-- Antes de empezar, crea la carpeta de auditoría desde PowerShell:
+--   docker exec sqlserver-2025 mkdir -p /audit/ReservasLab03
 -- Ejecuta cada bloque en orden y una sola vez, siguiendo la guía.
 
 -- 1. Creación de la base de datos
@@ -35,9 +37,10 @@ USE master;
 GO
 
 -- El objeto de servidor define dónde quedarán los eventos.
+-- Ruta dentro del contenedor; en tu equipo es shared\audit\ReservasLab03.
 CREATE SERVER AUDIT AuditoriaReservas
 TO FILE (
-    FILEPATH = N'C:\AuditLogs\ReservasLab03\',
+    FILEPATH = N'/audit/ReservasLab03/',
     MAXSIZE = 10 MB,
     MAX_FILES = 5
 )
@@ -55,6 +58,11 @@ CREATE DATABASE AUDIT SPECIFICATION AuditoriaReservasDB
 FOR SERVER AUDIT AuditoriaReservas
 ADD (SELECT, INSERT, DELETE ON OBJECT::dbo.ReservasLaboratorio BY public)
 WITH (STATE = ON);
+GO
+
+-- status_desc debe ser STARTED y audit_file_path debe apuntar a un archivo .sqlaudit.
+SELECT name, status_desc, audit_file_path
+FROM sys.dm_server_audit_status;
 GO
 
 -- 3. Generar acciones
@@ -82,14 +90,16 @@ ORDER BY IdReserva;
 GO
 
 -- 4. Consultar eventos
+-- Si no aparecen filas, espera unos segundos (QUEUE_DELAY) y vuelve a ejecutar este bloque.
 USE master;
 GO
 
+-- Lee todos los archivos de auditoría de la carpeta del contenedor.
 SELECT event_time, action_id, succeeded,
        server_principal_name, database_name,
        schema_name, object_name, statement
 FROM sys.fn_get_audit_file(
-    N'C:\AuditLogs\ReservasLab03\*.sqlaudit', DEFAULT, DEFAULT)
+    N'/audit/ReservasLab03/*.sqlaudit', DEFAULT, DEFAULT)
 WHERE database_name = N'ReservasLab03'
   AND schema_name = N'dbo'
   AND object_name = N'ReservasLaboratorio'
@@ -97,3 +107,31 @@ ORDER BY event_time DESC;
 GO
 
 -- Ejercicio guiado: resuelve las cinco tareas de la guía y conserva las evidencias.
+
+-- 5. Limpieza (opcional): solo para repetir la práctica después de entregar.
+-- Está comentada para que no se ejecute por accidente con el resto del script.
+-- Para usarla, selecciona las líneas y quita los comentarios (Ctrl+K, Ctrl+U en SSMS).
+--
+-- USE ReservasLab03;
+-- GO
+--
+-- ALTER DATABASE AUDIT SPECIFICATION AuditoriaReservasDB WITH (STATE = OFF);
+-- GO
+--
+-- DROP DATABASE AUDIT SPECIFICATION AuditoriaReservasDB;
+-- GO
+--
+-- USE master;
+-- GO
+--
+-- ALTER SERVER AUDIT AuditoriaReservas WITH (STATE = OFF);
+-- GO
+--
+-- DROP SERVER AUDIT AuditoriaReservas;
+-- GO
+--
+-- DROP DATABASE ReservasLab03;
+-- GO
+--
+-- Después, desde PowerShell:
+-- docker exec sqlserver-2025 sh -c "rm -f /audit/ReservasLab03/*.sqlaudit"
