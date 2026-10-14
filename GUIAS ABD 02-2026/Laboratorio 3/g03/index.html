@@ -186,6 +186,35 @@ GO</code></pre></div>
 <p>Busca el <code>INSERT</code> de la reserva <code>3</code> y el <code>DELETE</code> de la <code>999</code>. Después revisa la hora y la cuenta. El <code>DELETE</code> aparece dos veces, como <code>DL</code> y como <code>SL</code>, porque su <code>WHERE</code> también lee la tabla; por eso el bloque anterior deja cinco eventos. Puede haber más si repetiste consultas. Las instrucciones de un mismo lote pueden compartir <code>event_time</code>, así que su orden en el resultado puede variar. <strong>El registro y el estado final de la tabla responden preguntas distintas</strong>: SQL Audit no conserva automáticamente una copia anterior y posterior de cada fila.</p>
 <div class="important-box"><strong>¿No aparecen eventos?</strong> Espera unos segundos y consulta otra vez. Comprueba que los dos objetos estén activos y que las acciones se hayan ejecutado después de activarlos. Consulta de nuevo <code>sys.dm_server_audit_status</code>: si <code>status_desc</code> muestra <code>TARGET_CREATION_FAILED</code>, SQL Server no pudo crear el archivo porque la carpeta no existe, no tiene permisos de escritura o ya contiene cinco archivos (<code>MAX_FILES</code>).</div></google-codelab-step><google-codelab-step duration="15" label="Ejercicio guiado"><p>Resuelve estas <strong>cinco tareas</strong> sobre la base <code>ReservasLab03</code>. Guarda el SQL que utilices y comprueba cada resultado antes de continuar. Las salas, fechas y reservas del ejercicio son ficticias.</p>
 <ol><li><strong>Consulta focalizada.</strong> Muestra las reservas de la Sala de cómputo A. Localiza el evento <code>SELECT</code> correspondiente.</li><li><strong>Nueva reserva.</strong> Agrega la reserva <code>4</code> para la Sala de cómputo B, el <code>2026-10-07</code>, en turno de mañana y estado <code>Pendiente</code>. Comprueba la fila y busca el evento <code>INSERT</code>.</li><li><strong>Corrección de un registro temporal.</strong> Inserta una reserva de prueba con <code>IdReserva = 998</code> y estado <code>Registro de prueba</code>. Elimínala usando <code>WHERE IdReserva = 998</code>. Identifica los eventos de ambas operaciones y confirma que las reservas válidas siguen presentes.</li><li><strong>Amplía la auditoría.</strong> Desactiva <code>AuditoriaReservasDB</code>, agrega <code>UPDATE</code> sobre <code>OBJECT::dbo.ReservasLaboratorio</code> para <code>public</code> con <code>ALTER DATABASE AUDIT SPECIFICATION</code> y vuelve a activarla. Después ejecuta <code>DBCC FREESYSTEMCACHE ('TokenAndPermUserStore');</code> para que SQL Server aplique la acción nueva. Cambia solo el <code>Estado</code> de la reserva <code>1</code> a <code>Confirmada</code>. Verifica la fila y localiza el evento <code>UP</code>.</li><li><strong>Explica la evidencia.</strong> Escoge dos eventos distintos e indica qué cuenta, tabla, instrucción y hora aparecen. Explica por qué <code>succeeded = 1</code> no indica cuántas filas modificó una instrucción.</li></ol>
+<h3>Ejemplo: agregar una acción a la especificación</h3><p>Las acciones de una especificación solo pueden cambiarse mientras está desactivada; si está activa, SQL Server rechaza el cambio con el error <code>33229</code>. Este bloque resuelve la primera parte de la tarea 4: agrega <code>UPDATE</code> a <code>AuditoriaReservasDB</code> y comprueba qué acciones registra ahora.</p><div class="code-container"><div class="code-toolbar"><span class="code-language">SQL</span><button class="copy-btn" onclick="copyCode(this)">Copiar</button></div><pre class="prettyprint lang-sql"><code class="language-sql">USE ReservasLab03;
+GO
+
+-- 1. Desactiva la especificación para poder modificarla.
+ALTER DATABASE AUDIT SPECIFICATION AuditoriaReservasDB
+WITH (STATE = OFF);
+GO
+
+-- 2. Agrega UPDATE sobre la tabla para los usuarios de la base.
+ALTER DATABASE AUDIT SPECIFICATION AuditoriaReservasDB
+ADD (UPDATE ON OBJECT::dbo.ReservasLaboratorio BY public);
+GO
+
+-- 3. Vuelve a activarla.
+ALTER DATABASE AUDIT SPECIFICATION AuditoriaReservasDB
+WITH (STATE = ON);
+GO
+
+-- 4. Vacía la caché de permisos para que se aplique la acción nueva.
+DBCC FREESYSTEMCACHE ('TokenAndPermUserStore');
+GO
+
+-- Acciones que registra ahora la especificación.
+SELECT audit_action_name, class_desc,
+       OBJECT_NAME(major_id) AS objeto
+FROM sys.database_audit_specification_details
+ORDER BY audit_action_name;
+GO</code></pre></div>
+<p>La consulta final debe mostrar cuatro acciones sobre <code>ReservasLaboratorio</code>: <code>DELETE</code>, <code>INSERT</code>, <code>SELECT</code> y <code>UPDATE</code>. Con eso, completa la tarea 4: cambia el <code>Estado</code> de la reserva <code>1</code> y busca su evento <code>UP</code>.</p>
 <div class="important-box"><strong>¿Por qué vaciar la caché en la tarea 4?</strong> SQL Server guarda en la caché <code>TokenAndPermUserStore</code> las comprobaciones de permisos que ya realizó. En las pruebas con SQL Server 2025, después de modificar la especificación esa caché conservó la configuración anterior: el <code>UPDATE</code> solo dejó el evento <code>SL</code> de su <code>WHERE</code>, sin el <code>UP</code>, incluso desde otra ventana de consulta. <code>DBCC FREESYSTEMCACHE</code> vacía esa caché y requiere el permiso <code>ALTER SERVER STATE</code>, que <code>sa</code> tiene. En un servidor de producción, vaciar una caché obliga a recalcularla y puede afectar el rendimiento por un momento.</div>
 <div class="important-box"><strong>Entrega.</strong> Incluye tu SQL, una captura del estado final de la tabla y otra de los eventos que analizaste. Acompáñalas con respuestas breves. Si una instrucción falla, registra el mensaje y cómo lo resolviste.</div></google-codelab-step><google-codelab-step duration="3" label="Limpieza"><p>Conserva los archivos de auditoría hasta entregar tus evidencias. Si se indica detener la práctica, desactiva primero la especificación y después la auditoría de servidor con <code>STATE = OFF</code>.</p>
 <p>Para repetir el laboratorio desde cero, elimina los objetos en este orden. <strong>Hazlo solo después de entregar</strong>, porque también se pierde la evidencia de la práctica.</p><div class="code-container"><div class="code-toolbar"><span class="code-language">SQL</span><button class="copy-btn" onclick="copyCode(this)">Copiar</button></div><pre class="prettyprint lang-sql"><code class="language-sql">USE ReservasLab03;
