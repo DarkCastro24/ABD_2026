@@ -2,12 +2,12 @@
   "environment": "web",
   "format": "html",
   "prefix": "https://storage.googleapis.com",
-  "updated": "2026-10-19T12:00:00.000000-06:00",
+  "updated": "2026-10-23T12:00:00-06:00",
   "id": "g04",
-  "duration": 138,
-  "title": "Laboratorio 4 — Gestión de índices, esquemas y seguridad en SQL Server",
-  "summary": "Creación y evaluación de índices, y organización en esquemas con permisos, usando préstamos ficticios de una biblioteca universitaria. Ciclo 02-2026, versión 1.",
-  "source": ".\\G04.md",
+  "duration": 98,
+  "title": "Laboratorio 4 — Índices y esquemas en SQL Server",
+  "summary": "Guía informativa de índices y esquemas en SQL Server con ejemplos sobre BibliotecaLab04 y una carga total de 50 000 registros. Ciclo 02-2026, versión 2.",
+  "source": "./G04.md",
   "theme": "",
   "status": [
     "published"
