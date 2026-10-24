@@ -87,6 +87,16 @@ try { localStorage.getItem('g04'); } catch (e) {
 <google-codelab-step label="Introducción" duration="6">
 <p>Esta guía explica los contenidos de clase sobre <strong>índices y esquemas en SQL Server</strong>. Los ejemplos utilizan <code>BibliotecaLab04</code> para mostrar cómo se crean los índices, qué beneficio ofrece cada uno y cómo se organizan las tablas y sus permisos.</p>
 <p>El propósito es <strong>comprender los conceptos y la función de los comandos</strong>. El ejercicio práctico se desarrolla por separado, según las indicaciones del instructor.</p>
+<h3>Objetivo general</h3>
+<p><strong>Administrar índices y esquemas en SQL Server</strong> mediante la ejecución de sentencias T-SQL y el análisis de planes de ejecución sobre <code>BibliotecaLab04</code>, <strong>para mejorar la eficiencia de las consultas y organizar los objetos y sus permisos de acceso</strong>.</p>
+<h3>Objetivos específicos</h3>
+<ul>
+<li><strong>Crear distintos tipos de índices</strong> —agrupados, no agrupados, compuestos, únicos, filtrados y con columnas incluidas— según las necesidades de las consultas de <code>BibliotecaLab04</code>.</li>
+<li><strong>Interpretar los planes de ejecución, las lecturas lógicas y los tiempos</strong> para reconocer el efecto de los índices sobre el acceso a los datos.</li>
+<li><strong>Aplicar operaciones de mantenimiento de índices</strong> mediante la consulta de su fragmentación y el uso de <code>REORGANIZE</code>, <code>REBUILD</code> y <code>DROP INDEX</code>, según corresponda.</li>
+<li><strong>Organizar los objetos de la base de datos en esquemas</strong> mediante su creación, la transferencia de tablas y la asignación de propietarios.</li>
+<li><strong>Administrar permisos de acceso mediante usuarios y roles</strong> utilizando <code>GRANT</code> y <code>REVOKE</code> sobre esquemas para controlar la lectura de los datos.</li>
+</ul>
 <h3>Cuándo se utilizan</h3>
 <p>Los índices se consideran para <strong>consultas frecuentes o costosas</strong>, especialmente cuando una columna se utiliza para filtrar con <code>WHERE</code>. En esta guía aparecen búsquedas por socio, apellido, carrera, código de inventario y fecha.</p>
 <p><strong>El beneficio debe corresponder a una consulta concreta.</strong> Cada índice también ocupa espacio y añade trabajo cuando se insertan, actualizan o eliminan datos.</p>
