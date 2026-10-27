@@ -52,6 +52,12 @@ SELECT BusinessEntityID, Title, EmailPromotion, ModifiedDate
 FROM Person.Person
 WHERE PersonType = N'EM';
 GO
+-- Justificación: índice no agrupado. Person.Person ya tiene su índice agrupado en la llave primaria
+-- (BusinessEntityID) y solo puede haber uno por tabla; cambiarlo obligaría a reconstruir la llave primaria y
+-- los demás índices. PersonType no es única y 'EM' devuelve solo 273 de 19,972 filas (1.4%), así que un
+-- índice no agrupado sobre la columna de búsqueda basta para que el motor haga un Index Seek. El plan pasa de
+-- Clustered Index Scan (3,818 lecturas) a Index Seek + Key Lookup (847 lecturas); el Key Lookup queda porque
+-- Title, EmailPromotion y ModifiedDate no están en el índice.
 CREATE NONCLUSTERED INDEX IX_Person_PersonType
 ON Person.Person(PersonType);
 GO
@@ -69,6 +75,14 @@ SELECT LastName, FirstName, EmailPromotion, ModifiedDate
 FROM Person.Person
 WHERE LastName = N'Smith';
 GO
+-- Justificación: se reemplaza el índice existente con DROP_EXISTING = ON en lugar de crear otro. Se conserva
+-- su nombre y su clave (LastName, FirstName, MiddleName), así las consultas que ya lo usaban siguen igual, y
+-- se evita mantener dos índices sobre las mismas columnas. FirstName ya está en la clave; solo faltan
+-- EmailPromotion y ModifiedDate. El plan pasa de Index Seek + Key Lookup (611 lecturas) a un único Index Seek
+-- (4 lecturas).
+-- Columnas incluidas: EmailPromotion y ModifiedDate solo se devuelven en el SELECT; no se usan para filtrar
+-- ni para ordenar, así que no necesitan formar parte de la clave. En INCLUDE se guardan solo en el nivel
+-- hoja: la clave sigue angosta y el índice cubre la consulta sin Key Lookup.
 CREATE NONCLUSTERED INDEX IX_Person_LastName_FirstName_MiddleName
 ON Person.Person(LastName, FirstName, MiddleName)
 INCLUDE (EmailPromotion, ModifiedDate)
@@ -97,6 +111,10 @@ WHERE edh.EndDate IS NULL AND p.EmailPromotion = 0
 GROUP BY d.Name
 ORDER BY TarifaPromedio DESC;
 GO
+-- Justificación del índice: el operador más costoso es el Clustered Index Seek sobre Person (59%), que se
+-- repite por cada empleado para comprobar EmailPromotion = 0. IX_Person_EmailPromotion (clave EmailPromotion,
+-- sin columnas incluidas) es mucho más angosto que el índice agrupado de Person y ya trae BusinessEntityID,
+-- porque SQL Server agrega la clave agrupada a todo índice no agrupado; así cada búsqueda lee menos páginas.
 CREATE NONCLUSTERED INDEX IX_Person_EmailPromotion
 ON Person.Person(EmailPromotion);
 GO
@@ -112,5 +130,12 @@ WHERE edh.EndDate IS NULL AND p.EmailPromotion = 0
 GROUP BY d.Name
 ORDER BY TarifaPromedio DESC;
 GO
+-- Conclusión: antes del índice, Person era la tabla con más lecturas (1,294) y su Clustered Index Seek el
+-- operador más costoso (59%). Con IX_Person_EmailPromotion las lecturas de Person bajan a 607, el costo
+-- estimado del plan baja de 0.352 a 0.193 y el tiempo de CPU baja de ~11 ms a ~4 ms. Los algoritmos de unión
+-- no cambian: EmployeeDepartmentHistory–Person sigue con Nested Loops y las uniones con EmployeePayHistory,
+-- Employee y Department siguen con Hash Match. Solo cambia el acceso a Person, que ahora es un Index Seek
+-- sobre el índice nuevo (25% del costo). Employee, EmployeeDepartmentHistory, Department y EmployeePayHistory
+-- leen de 2 a 4 páginas cada una, por eso la mejora se concentra en Person.
 SET STATISTICS TIME OFF;
 GO
