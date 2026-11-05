@@ -22,8 +22,7 @@ async function main() {
     '-- Los comandos marcados con [PowerShell] se ejecutan en PowerShell, no en SSMS.',
     '-- Antes de empezar, crea la carpeta /backup/NotasLab05 en el contenedor (sección Preparar el entorno).',
     '-- La secuencia incluye un DROP DATABASE para simular la falla: no la ejecutes sobre una base real.',
-    '-- Desactiva Ctrl+M en la prueba de permisos. La limpieza final está comentada.',
-    '-- Las tablas de referencia de comandos no se ejecutan de nuevo.',
+    '-- La limpieza final está comentada.',
     ''
   ];
   for (const match of source.matchAll(/^## (.+)\nDuration: (\d+)\n([\s\S]*?)(?=^## |$(?![\s\S]))/gm)) {
@@ -45,7 +44,7 @@ async function main() {
         return `<figure><button type="button" class="diagram-image-button" onclick="openDiagram(this)" aria-label="Ampliar diagrama relacional"><img src="${data}" alt="${alt}" loading="lazy"/></button></figure>`;
       }
       const zoom = src.endsWith('.svg') ? '<button type="button" class="zoom-btn" onclick="openDiagram(this)">Ampliar diagrama</button>' : '';
-      return `<figure><img src="${data}" alt="${alt}" loading="lazy"/><figcaption>${alt}</figcaption>${zoom}</figure>`;
+      return `<figure><img src="${data}" alt="${alt}" loading="lazy"/>${zoom}</figure>`;
     });
     html = html.replace(/href="g05\//g, 'href="');
     html = html.replace(/<table>/g, '<div class="table-scroll"><table>').replace(/<\/table>/g, '</table></div>');

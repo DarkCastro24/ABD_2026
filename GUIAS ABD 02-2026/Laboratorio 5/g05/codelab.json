@@ -4,9 +4,9 @@
   "prefix": "https://storage.googleapis.com",
   "updated": "2026-11-04T12:00:00-06:00",
   "id": "g05",
-  "duration": 108,
+  "duration": 57,
   "title": "Laboratorio 5 — Copias de seguridad en SQL Server",
-  "summary": "Guía informativa de copias de seguridad en SQL Server con ejemplos sobre NotasLab05: respaldos completos, diferenciales y de log, restauración, respaldos lógicos y automatización. Ciclo 02-2026, versión 1.",
+  "summary": "Guía informativa de copias de seguridad en SQL Server con un ejemplo corto sobre NotasLab05: objetivos de recuperación, tipos de respaldo, restauración, respaldos lógicos y SQL Agent. Ciclo 02-2026, versión 1.",
   "source": "./G05.md",
   "theme": "",
   "status": [

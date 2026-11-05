@@ -84,55 +84,26 @@ try { localStorage.getItem('g05'); } catch (e) {
 }
 </script></head><body>
 <google-codelab id="g05" title="Laboratorio 5 — Copias de seguridad en SQL Server" environment="web" category="databases">
-<google-codelab-step label="Introducción" duration="6">
-<p>Esta guía explica los contenidos de clase sobre <strong>copias de seguridad y restauración en SQL Server</strong>. Los ejemplos utilizan <code>NotasLab05</code>, una base con calificaciones ficticias, para mostrar cómo se respalda una base, cómo se recupera después de una falla y qué datos se conservan.</p>
+<google-codelab-step label="Introducción" duration="5">
+<p>Esta guía resume los contenidos de clase sobre <strong>copias de seguridad y restauración en SQL Server</strong>. El ejemplo utiliza <code>NotasLab05</code>, una base con calificaciones ficticias, para respaldarla, simular una falla y restaurarla.</p>
 <p>El propósito es <strong>comprender los conceptos y la función de los comandos</strong>. El ejercicio práctico se desarrolla por separado, según las indicaciones del instructor.</p>
 <h3>Objetivo general</h3>
 <p><strong>Aplicar una estrategia de copias de seguridad en SQL Server</strong> mediante respaldos completos, diferenciales y del registro de transacciones sobre <code>NotasLab05</code>, <strong>para restaurar la base después de una falla y relacionar los datos recuperados con los objetivos de recuperación RPO y RTO</strong>.</p>
 <h3>Objetivos específicos</h3>
 <ul>
-<li><strong>Explicar los objetivos de recuperación RPO, RTO, WRT y MTD</strong> y su relación con la elección de una estrategia de respaldo.</li>
+<li><strong>Explicar los objetivos de recuperación RPO, RTO, WRT y MTD</strong> y su relación con la estrategia de respaldo.</li>
 <li><strong>Distinguir los respaldos lógicos de los físicos</strong> y los tipos completo, diferencial e incremental.</li>
-<li><strong>Crear respaldos físicos con <code>BACKUP DATABASE</code> y <code>BACKUP LOG</code></strong> y comprobar los archivos y el historial que generan.</li>
-<li><strong>Restaurar una base con <code>RESTORE</code></strong> aplicando los respaldos en orden con <code>NORECOVERY</code> y <code>RECOVERY</code>.</li>
-<li><strong>Exportar e importar datos con Generar scripts, <code>sqlcmd</code> y <code>bcp</code></strong> como respaldos lógicos.</li>
-<li><strong>Delegar y programar respaldos</strong> mediante el rol <code>db_backupoperator</code> y un job de SQL Agent.</li>
+<li><strong>Respaldar y restaurar una base</strong> con <code>BACKUP</code> y <code>RESTORE</code>, aplicando los respaldos en orden.</li>
+<li><strong>Programar un respaldo</strong> con un job de SQL Agent.</li>
 </ul>
 <h3>Por qué respaldar</h3>
-<p>En clase se revisaron tres incidentes reales:</p>
-<div class="table-scroll"><table>
-<thead>
-<tr>
-<th>Caso</th>
-<th>Qué ocurrió</th>
-</tr>
-</thead>
-<tbody><tr>
-<td>Pixar, <em>Toy Story 2</em> (1998)</td>
-<td>Un comando <code>rm -rf</code> ejecutado por error eliminó gran parte de los archivos del proyecto y el respaldo oficial no funcionaba.</td>
-</tr>
-<tr>
-<td>GitLab (2017)</td>
-<td>Un ingeniero borró por error la base de datos de producción. El respaldo principal no funcionó, las réplicas estaban desactualizadas y se perdieron 6 horas de datos.</td>
-</tr>
-<tr>
-<td>Myspace (2019)</td>
-<td>Durante una migración de servidores se perdieron más de 50 millones de canciones subidas entre 2003 y 2015, porque no existía un respaldo válido.</td>
-</tr>
-</tbody></table></div>
-<p>Los tres casos combinan <strong>un error humano o una migración con respaldos que nadie había verificado</strong>. Las lecciones de la clase son:</p>
-<ul>
-<li>La migración de un sistema debe tener un respaldo antes de ejecutarse.</li>
-<li>Sin verificación de los respaldos, es como no tenerlos.</li>
-<li>Un fallo humano sumado a la falta de un respaldo verificado produce un desastre.</li>
-</ul>
-<p>Las causas de pérdida de datos revisadas en clase son la migración sin respaldo, una estrategia de respaldo débil, las restauraciones no probadas, el error humano, la falta de redundancia y suponer que los respaldos existen sin comprobarlo.</p>
+<p>En clase se revisaron tres incidentes: Pixar perdió gran parte de los archivos de <em>Toy Story 2</em> por un <code>rm -rf</code> accidental (1998), GitLab borró por error su base de producción y perdió 6 horas de datos (2017), y Myspace perdió las canciones subidas durante 12 años en una migración de servidores (2019). En los tres casos <strong>el respaldo no funcionaba, estaba desactualizado o no existía</strong>.</p>
 <aside class="learning-tip" role="note">
-<p><strong>Idea clave:</strong> un plan que no se ha probado es un plan que no existe. Por eso cada respaldo de esta guía termina con una comprobación y la base se restaura después de simular una falla.</p>
+<p><strong>Idea clave:</strong> sin verificación, un respaldo es como no tenerlo. Un plan que no se ha probado es un plan que no existe.</p>
 </aside>
 </google-codelab-step>
-<google-codelab-step label="Objetivos de recuperación" duration="12">
-<p>Un <strong>plan de contingencia</strong> define cuánto tiempo puede estar detenido un servicio y cuántos datos puede perder. Se expresa con cuatro valores:</p>
+<google-codelab-step label="Objetivos de recuperación" duration="8">
+<p>Un <strong>plan de contingencia</strong> define cuánto tiempo puede estar detenido un servicio y cuántos datos puede perder:</p>
 <div class="table-scroll"><table>
 <thead>
 <tr>
@@ -144,98 +115,34 @@ try { localStorage.getItem('g05'); } catch (e) {
 <tbody><tr>
 <td><strong>RPO</strong></td>
 <td><em>Recovery Point Objective</em></td>
-<td>Cantidad máxima de pérdida de datos que la organización puede tolerar, medida en tiempo.</td>
+<td>Máxima pérdida de datos tolerable, medida en tiempo.</td>
 </tr>
 <tr>
 <td><strong>RTO</strong></td>
 <td><em>Recovery Time Objective</em></td>
-<td>Tiempo máximo aceptable para restaurar las operaciones después de una interrupción.</td>
+<td>Tiempo máximo para restaurar las operaciones después de una interrupción.</td>
 </tr>
 <tr>
 <td><strong>WRT</strong></td>
 <td><em>Work Recovery Time</em></td>
-<td>Tiempo para verificar los sistemas y ponerlos en línea después de recuperar los datos.</td>
+<td>Tiempo para verificar los sistemas y ponerlos en línea después de recuperarlos.</td>
 </tr>
 <tr>
 <td><strong>MTD</strong></td>
 <td><em>Maximum Tolerable Downtime</em></td>
-<td>Tiempo máximo que el servicio puede estar inoperativo antes de que las consecuencias sean inaceptables para la empresa.</td>
+<td>Tiempo máximo sin servicio antes de que las consecuencias sean inaceptables.</td>
 </tr>
 </tbody></table></div>
-<figure><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAwIDQ0MCIgcm9sZT0iaW1nIiBhcmlhLWxhYmVsbGVkYnk9InRpdGxlIGRlc2MiPjx0aXRsZSBpZD0idGl0bGUiPkxvcyBvYmpldGl2b3MgZGUgcmVjdXBlcmFjacOzbiBlbiB1bmEgbMOtbmVhIGRlIHRpZW1wbzwvdGl0bGU+PGRlc2MgaWQ9ImRlc2MiPkVsIFJQTyBzZSBtaWRlIGhhY2lhIGF0csOhcyBkZXNkZSBsYSBmYWxsYSBoYXN0YSBlbCDDumx0aW1vIHJlc3BhbGRvLiBSVE8geSBXUlQgc2UgbWlkZW4gaGFjaWEgYWRlbGFudGUgeSBqdW50b3Mgbm8gZGViZW4gc3VwZXJhciBlbCBNVEQuPC9kZXNjPjxkZWZzPjxtYXJrZXIgaWQ9ImEiIHZpZXdCb3g9IjAgMCAxMCAxMCIgcmVmWD0iOSIgcmVmWT0iNSIgbWFya2VyV2lkdGg9IjgiIG1hcmtlckhlaWdodD0iOCIgb3JpZW50PSJhdXRvLXN0YXJ0LXJldmVyc2UiPjxwYXRoIGQ9Ik0gMCAwIEwgMTAgNSBMIDAgMTAgWiIgZmlsbD0iIzQyNjE3ZiIvPjwvbWFya2VyPjwvZGVmcz48cmVjdCB3aWR0aD0iMTAwMCIgaGVpZ2h0PSI0NDAiIHJ4PSIxNiIgZmlsbD0iI2Y4ZmFmYyIvPjxnIGZvbnQtZmFtaWx5PSJTZWdvZSBVSSxBcmlhbCxzYW5zLXNlcmlmIj48dGV4dCB4PSIzMiIgeT0iNDQiIGZvbnQtc2l6ZT0iMjciIGZpbGw9IiMxNzJlNDkiIGZvbnQtd2VpZ2h0PSI3MDAiPkxvcyBvYmpldGl2b3MgZGUgcmVjdXBlcmFjacOzbiBlbiB1bmEgbMOtbmVhIGRlIHRpZW1wbzwvdGV4dD48dGV4dCB4PSIzMiIgeT0iNzUiIGZvbnQtc2l6ZT0iMTciIGZpbGw9IiM1MjY3N2QiIGZvbnQtd2VpZ2h0PSI0MDAiPlRvZG9zIHNlIG1pZGVuIGRlc2RlIGxhIGZhbGxhOiBlbCBSUE8gaGFjaWEgYXRyw6FzOyBSVE8sIFdSVCB5IE1URCBoYWNpYSBhZGVsYW50ZS48L3RleHQ+PHBhdGggZD0iTSA1MCAyMDAgTCA5NTAgMjAwIiBmaWxsPSJub25lIiBzdHJva2U9IiM0MjYxN2YiIHN0cm9rZS13aWR0aD0iMyIgbWFya2VyLWVuZD0idXJsKCNhKSIvPjx0ZXh0IHg9Ijk0MCIgeT0iMjI4IiBmb250LXNpemU9IjE1IiBmaWxsPSIjNjA3NDhhIiB0ZXh0LWFuY2hvcj0iZW5kIj50aWVtcG88L3RleHQ+PGNpcmNsZSBjeD0iMTUwIiBjeT0iMjAwIiByPSIxNSIgZmlsbD0iIzA4N2M2MSIvPjxwYXRoIGQ9Ik0gMTQzIDIwMCBMIDE0OSAyMDYgTCAxNTggMTk0IiBmaWxsPSJub25lIiBzdHJva2U9IiNmZmZmZmYiIHN0cm9rZS13aWR0aD0iMyIvPjx0ZXh0IHg9IjE1MCIgeT0iMTY2IiBmb250LXNpemU9IjE3IiBmaWxsPSIjMjUzYzU1IiBmb250LXdlaWdodD0iNjAwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj7Dmmx0aW1vIHJlc3BhbGRvPC90ZXh0PjxjaXJjbGUgY3g9IjQwMCIgY3k9IjIwMCIgcj0iMTciIGZpbGw9IiNiNTQ4MmEiLz48cGF0aCBkPSJNIDM5MyAxOTMgTCA0MDcgMjA3IE0gNDA3IDE5MyBMIDM5MyAyMDciIHN0cm9rZT0iI2ZmZmZmZiIgc3Ryb2tlLXdpZHRoPSIzIi8+PHRleHQgeD0iNDAwIiB5PSIxNjYiIGZvbnQtc2l6ZT0iMTciIGZpbGw9IiNiNTQ4MmEiIGZvbnQtd2VpZ2h0PSI3MDAiIHRleHQtYW5jaG9yPSJtaWRkbGUiPkZhbGxhPC90ZXh0PjxjaXJjbGUgY3g9IjYyMCIgY3k9IjIwMCIgcj0iMTEiIGZpbGw9IiMyNzVkYWQiLz48dGV4dCB4PSI2MjAiIHk9IjE2NiIgZm9udC1zaXplPSIxNyIgZmlsbD0iIzI1M2M1NSIgZm9udC13ZWlnaHQ9IjYwMCIgdGV4dC1hbmNob3I9Im1pZGRsZSI+RGF0b3MgcmVzdGF1cmFkb3M8L3RleHQ+PGNpcmNsZSBjeD0iODQwIiBjeT0iMjAwIiByPSIxMSIgZmlsbD0iIzI3NWRhZCIvPjx0ZXh0IHg9Ijg0MCIgeT0iMTY2IiBmb250LXNpemU9IjE3IiBmaWxsPSIjMjUzYzU1IiBmb250LXdlaWdodD0iNjAwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5Qcm9jZXNvcyBub3JtYWxpemFkb3M8L3RleHQ+PHBhdGggZD0iTSAxNTAgMjQwIEwgMTUwIDI1MiBMIDQwMCAyNTIgTCA0MDAgMjQwIiBmaWxsPSJub25lIiBzdHJva2U9IiNiNTQ4MmEiIHN0cm9rZS13aWR0aD0iMiIvPjx0ZXh0IHg9IjI3NSIgeT0iMjgwIiBmb250LXNpemU9IjE5IiBmaWxsPSIjYjU0ODJhIiBmb250LXdlaWdodD0iNzAwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5SUE88L3RleHQ+PHRleHQgeD0iMjc1IiB5PSIzMDQiIGZvbnQtc2l6ZT0iMTYiIGZpbGw9IiMyNTNjNTUiIHRleHQtYW5jaG9yPSJtaWRkbGUiPsK/Q3XDoW50b3MgZGF0b3Mgc2UgcGllcmRlbj88L3RleHQ+PHBhdGggZD0iTSA0MDAgMjQwIEwgNDAwIDI1MiBMIDYyMCAyNTIgTCA2MjAgMjQwIiBmaWxsPSJub25lIiBzdHJva2U9IiMyNzVkYWQiIHN0cm9rZS13aWR0aD0iMiIvPjx0ZXh0IHg9IjUxMCIgeT0iMjgwIiBmb250LXNpemU9IjE5IiBmaWxsPSIjMjc1ZGFkIiBmb250LXdlaWdodD0iNzAwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5SVE88L3RleHQ+PHRleHQgeD0iNTEwIiB5PSIzMDQiIGZvbnQtc2l6ZT0iMTYiIGZpbGw9IiMyNTNjNTUiIHRleHQtYW5jaG9yPSJtaWRkbGUiPlRpZW1wbyBwYXJhIHJlc3RhdXJhcjwvdGV4dD48cGF0aCBkPSJNIDYyMCAyNDAgTCA2MjAgMjUyIEwgODQwIDI1MiBMIDg0MCAyNDAiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzI3NWRhZCIgc3Ryb2tlLXdpZHRoPSIyIi8+PHRleHQgeD0iNzMwIiB5PSIyODAiIGZvbnQtc2l6ZT0iMTkiIGZpbGw9IiMyNzVkYWQiIGZvbnQtd2VpZ2h0PSI3MDAiIHRleHQtYW5jaG9yPSJtaWRkbGUiPldSVDwvdGV4dD48dGV4dCB4PSI3MzAiIHk9IjMwNCIgZm9udC1zaXplPSIxNiIgZmlsbD0iIzI1M2M1NSIgdGV4dC1hbmNob3I9Im1pZGRsZSI+VmVyaWZpY2FyIHkgcG9uZXIgZW4gbMOtbmVhPC90ZXh0PjxwYXRoIGQ9Ik0gNDAwIDMyNiBMIDQwMCAzMzggTCA4NDAgMzM4IEwgODQwIDMyNiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMDg3YzYxIiBzdHJva2Utd2lkdGg9IjIiLz48dGV4dCB4PSI2MjAiIHk9IjM2NiIgZm9udC1zaXplPSIxOSIgZmlsbD0iIzA4N2M2MSIgZm9udC13ZWlnaHQ9IjcwMCIgdGV4dC1hbmNob3I9Im1pZGRsZSI+TVREPC90ZXh0Pjx0ZXh0IHg9IjYyMCIgeT0iMzkwIiBmb250LXNpemU9IjE2IiBmaWxsPSIjMjUzYzU1IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5Nw6F4aW1vIHRpZW1wbyBzaW4gc2VydmljaW8gcXVlIHRvbGVyYSBlbCBuZWdvY2lvOiBSVE8gKyBXUlQg4omkIE1URDwvdGV4dD48dGV4dCB4PSIzMiIgeT0iNDI0IiBmb250LXNpemU9IjE1IiBmaWxsPSIjNjA3NDhhIiBmb250LXdlaWdodD0iNDAwIj5Ob3Rhc0xhYjA1IMK3IExhYm9yYXRvcmlvIDUgwrcgRGlhZ3JhbWEgY29uY2VwdHVhbDwvdGV4dD48L2c+PC9zdmc+Cg==" alt="RPO, RTO, WRT y MTD alrededor de una falla." loading="lazy"/><figcaption>RPO, RTO, WRT y MTD alrededor de una falla.</figcaption><button type="button" class="zoom-btn" onclick="openDiagram(this)">Ampliar diagrama</button></figure>
-<p>Los valores <strong>dependen de la naturaleza del servicio</strong>. Un proceso transaccional de producción no tiene la misma criticidad que uno administrativo, por lo que sus objetivos de recuperación también son distintos. Para definirlos se clasifican los servicios y se analiza su impacto en el negocio.</p>
-<aside class="learning-tip" role="note">
-<p><strong>Idea clave:</strong> el RPO se mide <strong>hacia atrás</strong>, desde la falla hasta el último respaldo, e indica cada cuánto conviene respaldar. El RTO se mide <strong>hacia adelante</strong>, hasta tener los datos restaurados. El tiempo total sin servicio, RTO más WRT, no debe superar el MTD.</p>
-</aside>
+<figure><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAwIDQxMCIgcm9sZT0iaW1nIiBhcmlhLWxhYmVsbGVkYnk9InRpdGxlIGRlc2MiPjx0aXRsZSBpZD0idGl0bGUiPkxvcyBvYmpldGl2b3MgZGUgcmVjdXBlcmFjacOzbiBlbiB1bmEgbMOtbmVhIGRlIHRpZW1wbzwvdGl0bGU+PGRlc2MgaWQ9ImRlc2MiPkVsIFJQTyBzZSBtaWRlIGhhY2lhIGF0csOhcyBkZXNkZSBsYSBmYWxsYSBoYXN0YSBlbCDDumx0aW1vIHJlc3BhbGRvLiBSVE8geSBXUlQgc2UgbWlkZW4gaGFjaWEgYWRlbGFudGUgeSBqdW50b3Mgbm8gZGViZW4gc3VwZXJhciBlbCBNVEQuPC9kZXNjPjxkZWZzPjxtYXJrZXIgaWQ9ImEiIHZpZXdCb3g9IjAgMCAxMCAxMCIgcmVmWD0iOSIgcmVmWT0iNSIgbWFya2VyV2lkdGg9IjgiIG1hcmtlckhlaWdodD0iOCIgb3JpZW50PSJhdXRvLXN0YXJ0LXJldmVyc2UiPjxwYXRoIGQ9Ik0gMCAwIEwgMTAgNSBMIDAgMTAgWiIgZmlsbD0iIzQyNjE3ZiIvPjwvbWFya2VyPjwvZGVmcz48cmVjdCB3aWR0aD0iMTAwMCIgaGVpZ2h0PSI0MTAiIHJ4PSIxNiIgZmlsbD0iI2Y4ZmFmYyIvPjxnIGZvbnQtZmFtaWx5PSJTZWdvZSBVSSxBcmlhbCxzYW5zLXNlcmlmIj48dGV4dCB4PSIzMiIgeT0iNDQiIGZvbnQtc2l6ZT0iMjciIGZpbGw9IiMxNzJlNDkiIGZvbnQtd2VpZ2h0PSI3MDAiPkxvcyBvYmpldGl2b3MgZGUgcmVjdXBlcmFjacOzbiBlbiB1bmEgbMOtbmVhIGRlIHRpZW1wbzwvdGV4dD48dGV4dCB4PSIzMiIgeT0iNzUiIGZvbnQtc2l6ZT0iMTciIGZpbGw9IiM1MjY3N2QiIGZvbnQtd2VpZ2h0PSI0MDAiPlRvZG9zIHNlIG1pZGVuIGRlc2RlIGxhIGZhbGxhOiBlbCBSUE8gaGFjaWEgYXRyw6FzOyBSVE8sIFdSVCB5IE1URCBoYWNpYSBhZGVsYW50ZS48L3RleHQ+PHBhdGggZD0iTSA1MCAyMDAgTCA5NTAgMjAwIiBmaWxsPSJub25lIiBzdHJva2U9IiM0MjYxN2YiIHN0cm9rZS13aWR0aD0iMyIgbWFya2VyLWVuZD0idXJsKCNhKSIvPjx0ZXh0IHg9Ijk0MCIgeT0iMjI4IiBmb250LXNpemU9IjE1IiBmaWxsPSIjNjA3NDhhIiB0ZXh0LWFuY2hvcj0iZW5kIj50aWVtcG88L3RleHQ+PGNpcmNsZSBjeD0iMTUwIiBjeT0iMjAwIiByPSIxNSIgZmlsbD0iIzA4N2M2MSIvPjxwYXRoIGQ9Ik0gMTQzIDIwMCBMIDE0OSAyMDYgTCAxNTggMTk0IiBmaWxsPSJub25lIiBzdHJva2U9IiNmZmZmZmYiIHN0cm9rZS13aWR0aD0iMyIvPjx0ZXh0IHg9IjE1MCIgeT0iMTY2IiBmb250LXNpemU9IjE3IiBmaWxsPSIjMjUzYzU1IiBmb250LXdlaWdodD0iNjAwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj7Dmmx0aW1vIHJlc3BhbGRvPC90ZXh0PjxjaXJjbGUgY3g9IjQwMCIgY3k9IjIwMCIgcj0iMTciIGZpbGw9IiNiNTQ4MmEiLz48cGF0aCBkPSJNIDM5MyAxOTMgTCA0MDcgMjA3IE0gNDA3IDE5MyBMIDM5MyAyMDciIHN0cm9rZT0iI2ZmZmZmZiIgc3Ryb2tlLXdpZHRoPSIzIi8+PHRleHQgeD0iNDAwIiB5PSIxNjYiIGZvbnQtc2l6ZT0iMTciIGZpbGw9IiNiNTQ4MmEiIGZvbnQtd2VpZ2h0PSI3MDAiIHRleHQtYW5jaG9yPSJtaWRkbGUiPkZhbGxhPC90ZXh0PjxjaXJjbGUgY3g9IjYyMCIgY3k9IjIwMCIgcj0iMTEiIGZpbGw9IiMyNzVkYWQiLz48dGV4dCB4PSI2MjAiIHk9IjE2NiIgZm9udC1zaXplPSIxNyIgZmlsbD0iIzI1M2M1NSIgZm9udC13ZWlnaHQ9IjYwMCIgdGV4dC1hbmNob3I9Im1pZGRsZSI+RGF0b3MgcmVzdGF1cmFkb3M8L3RleHQ+PGNpcmNsZSBjeD0iODQwIiBjeT0iMjAwIiByPSIxMSIgZmlsbD0iIzI3NWRhZCIvPjx0ZXh0IHg9Ijg0MCIgeT0iMTY2IiBmb250LXNpemU9IjE3IiBmaWxsPSIjMjUzYzU1IiBmb250LXdlaWdodD0iNjAwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5Qcm9jZXNvcyBub3JtYWxpemFkb3M8L3RleHQ+PHBhdGggZD0iTSAxNTAgMjQwIEwgMTUwIDI1MiBMIDQwMCAyNTIgTCA0MDAgMjQwIiBmaWxsPSJub25lIiBzdHJva2U9IiNiNTQ4MmEiIHN0cm9rZS13aWR0aD0iMiIvPjx0ZXh0IHg9IjI3NSIgeT0iMjgwIiBmb250LXNpemU9IjE5IiBmaWxsPSIjYjU0ODJhIiBmb250LXdlaWdodD0iNzAwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5SUE88L3RleHQ+PHRleHQgeD0iMjc1IiB5PSIzMDQiIGZvbnQtc2l6ZT0iMTYiIGZpbGw9IiMyNTNjNTUiIHRleHQtYW5jaG9yPSJtaWRkbGUiPsK/Q3XDoW50b3MgZGF0b3Mgc2UgcGllcmRlbj88L3RleHQ+PHBhdGggZD0iTSA0MDAgMjQwIEwgNDAwIDI1MiBMIDYyMCAyNTIgTCA2MjAgMjQwIiBmaWxsPSJub25lIiBzdHJva2U9IiMyNzVkYWQiIHN0cm9rZS13aWR0aD0iMiIvPjx0ZXh0IHg9IjUxMCIgeT0iMjgwIiBmb250LXNpemU9IjE5IiBmaWxsPSIjMjc1ZGFkIiBmb250LXdlaWdodD0iNzAwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5SVE88L3RleHQ+PHRleHQgeD0iNTEwIiB5PSIzMDQiIGZvbnQtc2l6ZT0iMTYiIGZpbGw9IiMyNTNjNTUiIHRleHQtYW5jaG9yPSJtaWRkbGUiPlRpZW1wbyBwYXJhIHJlc3RhdXJhcjwvdGV4dD48cGF0aCBkPSJNIDYyMCAyNDAgTCA2MjAgMjUyIEwgODQwIDI1MiBMIDg0MCAyNDAiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzI3NWRhZCIgc3Ryb2tlLXdpZHRoPSIyIi8+PHRleHQgeD0iNzMwIiB5PSIyODAiIGZvbnQtc2l6ZT0iMTkiIGZpbGw9IiMyNzVkYWQiIGZvbnQtd2VpZ2h0PSI3MDAiIHRleHQtYW5jaG9yPSJtaWRkbGUiPldSVDwvdGV4dD48dGV4dCB4PSI3MzAiIHk9IjMwNCIgZm9udC1zaXplPSIxNiIgZmlsbD0iIzI1M2M1NSIgdGV4dC1hbmNob3I9Im1pZGRsZSI+VmVyaWZpY2FyIHkgcG9uZXIgZW4gbMOtbmVhPC90ZXh0PjxwYXRoIGQ9Ik0gNDAwIDMyNiBMIDQwMCAzMzggTCA4NDAgMzM4IEwgODQwIDMyNiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMDg3YzYxIiBzdHJva2Utd2lkdGg9IjIiLz48dGV4dCB4PSI2MjAiIHk9IjM2NiIgZm9udC1zaXplPSIxOSIgZmlsbD0iIzA4N2M2MSIgZm9udC13ZWlnaHQ9IjcwMCIgdGV4dC1hbmNob3I9Im1pZGRsZSI+TVREPC90ZXh0Pjx0ZXh0IHg9IjYyMCIgeT0iMzkwIiBmb250LXNpemU9IjE2IiBmaWxsPSIjMjUzYzU1IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5Nw6F4aW1vIHRpZW1wbyBzaW4gc2VydmljaW8gcXVlIHRvbGVyYSBlbCBuZWdvY2lvOiBSVE8gKyBXUlQg4omkIE1URDwvdGV4dD48L2c+PC9zdmc+DQo=" alt="RPO, RTO, WRT y MTD alrededor de una falla." loading="lazy"/><button type="button" class="zoom-btn" onclick="openDiagram(this)">Ampliar diagrama</button></figure>
+<p>Los valores <strong>dependen de la criticidad de cada servicio</strong>: un proceso transaccional de producción no tolera la misma pérdida que uno administrativo.</p>
 <h3>Pregunta de control</h3>
-<p>Una empresa respalda su base de datos con tres estrategias: un respaldo <strong>completo</strong> los domingos a las 2:00 a. m., respaldos <strong>incrementales</strong> cada 6 horas y un respaldo <strong>diferencial</strong> diario a las 6:00 p. m. El jueves a las 4:30 p. m. ocurre una falla crítica. Se requiere recuperar la mayor cantidad de datos posible y volver a operar lo antes posible.</p>
-<div class="table-scroll"><table>
-<thead>
-<tr>
-<th>Hora</th>
-<th>Dom 20/7</th>
-<th>Lun 21/7</th>
-<th>Mar 22/7</th>
-<th>Mié 23/7</th>
-<th>Jue 24/7</th>
-</tr>
-</thead>
-<tbody><tr>
-<td>2:00 a. m.</td>
-<td>Completo</td>
-<td>Incremental</td>
-<td>Incremental</td>
-<td>Incremental</td>
-<td>Incremental</td>
-</tr>
-<tr>
-<td>8:00 a. m.</td>
-<td>Incremental</td>
-<td>Incremental</td>
-<td>Incremental</td>
-<td>Incremental</td>
-<td>Incremental</td>
-</tr>
-<tr>
-<td>2:00 p. m.</td>
-<td>Incremental</td>
-<td>Incremental</td>
-<td>Incremental</td>
-<td>Incremental</td>
-<td>Incremental</td>
-</tr>
-<tr>
-<td>4:30 p. m.</td>
-<td>—</td>
-<td>—</td>
-<td>—</td>
-<td>—</td>
-<td><strong>Falla</strong></td>
-</tr>
-<tr>
-<td>6:00 p. m.</td>
-<td>Diferencial</td>
-<td>Diferencial</td>
-<td>Diferencial</td>
-<td>Diferencial</td>
-<td>—</td>
-</tr>
-<tr>
-<td>8:00 p. m.</td>
-<td>Incremental</td>
-<td>Incremental</td>
-<td>Incremental</td>
-<td>Incremental</td>
-<td>—</td>
-</tr>
-</tbody></table></div>
-<p>Si se contara con una sola de las estrategias, el resultado sería:</p>
+<p>Una empresa hace un respaldo <strong>completo</strong> los domingos a las 2:00 a. m., <strong>incrementales</strong> cada 6 horas y un <strong>diferencial</strong> diario a las 6:00 p. m. El jueves a las 4:30 p. m. ocurre una falla. Si contara con una sola de las estrategias:</p>
 <div class="table-scroll"><table>
 <thead>
 <tr>
 <th>Estrategia</th>
-<th>Último respaldo antes de la falla</th>
-<th>RPO: horas de datos perdidos</th>
+<th>Último respaldo</th>
+<th>RPO: horas perdidas</th>
 <th>RTO: respaldos que se restauran</th>
 </tr>
 </thead>
@@ -249,117 +156,57 @@ try { localStorage.getItem('g05'); } catch (e) {
 <td>Diferencial</td>
 <td>Miércoles, 6:00 p. m.</td>
 <td>22.5</td>
-<td>2: el completo y el último diferencial</td>
+<td>2</td>
 </tr>
 <tr>
 <td>Incremental</td>
 <td>Jueves, 2:00 p. m.</td>
 <td>2.5</td>
-<td>19: el completo y los 18 incrementales</td>
+<td>19</td>
 </tr>
 </tbody></table></div>
-<ul>
-<li><strong>El RPO más bajo corresponde a la estrategia incremental</strong>, porque su último respaldo es el más cercano a la falla y la pérdida máxima es menor.</li>
-<li><strong>El RTO más alto también corresponde a la incremental</strong>, porque hay que restaurar el completo del domingo y cada incremental hasta el jueves a las 2:00 p. m. Es el proceso más largo y el más propenso a fallar si uno de esos archivos está dañado.</li>
-</ul>
-<p>La elección del tipo de respaldo depende de las necesidades de cada entorno en tiempo, espacio y rapidez de recuperación. <strong>La estrategia más eficaz combina los tipos</strong>: completos periódicos con diferenciales o incrementales diarios. En este calendario, el completo del domingo, el diferencial del miércoles y los cuatro incrementales posteriores suman <strong>6 respaldos</strong> y conservan el RPO de 2.5 horas.</p>
+<p>La estrategia incremental tiene <strong>el RPO más bajo</strong>, pero también <strong>el RTO más alto</strong>, porque exige restaurar el completo y cada incremental. Por eso conviene <strong>combinar los tipos</strong>: el completo, el diferencial del miércoles y los cuatro incrementales posteriores suman 6 respaldos y conservan el RPO de 2.5 horas.</p>
 </google-codelab-step>
-<google-codelab-step label="Tipos de respaldo" duration="10">
-<h3>Respaldos lógicos y físicos</h3>
-<p>Un <strong>respaldo lógico</strong> exporta los datos y los esquemas en un formato legible, como SQL. Se utiliza principalmente para <strong>migraciones, documentación o transferencias parciales de datos</strong>.</p>
-<p>Un <strong>respaldo físico</strong> es una copia bit a bit de los archivos de la base de datos o de sus bloques de almacenamiento. Permite <strong>recuperar la base completa</strong> tal como estaba en el momento del respaldo.</p>
-<figure><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAwIDQyMCIgcm9sZT0iaW1nIiBhcmlhLWxhYmVsbGVkYnk9InRpdGxlIGRlc2MiPjx0aXRsZSBpZD0idGl0bGUiPlJlc3BhbGRvIGzDs2dpY28geSByZXNwYWxkbyBmw61zaWNvPC90aXRsZT48ZGVzYyBpZD0iZGVzYyI+RWwgbMOzZ2ljbyBleHBvcnRhIG9iamV0b3MgeSBkYXRvcyBsZWdpYmxlcyBjb24gR2VuZXJhciBzY3JpcHRzLCBzcWxjbWQgbyBiY3AuIEVsIGbDrXNpY28gY29waWEgbGFzIHDDoWdpbmFzIGRlIGxhIGJhc2UgZW4gYXJjaGl2b3MgLmJhayB5IC50cm4uPC9kZXNjPjxyZWN0IHdpZHRoPSIxMDAwIiBoZWlnaHQ9IjQyMCIgcng9IjE2IiBmaWxsPSIjZjhmYWZjIi8+PGcgZm9udC1mYW1pbHk9IlNlZ29lIFVJLEFyaWFsLHNhbnMtc2VyaWYiPjx0ZXh0IHg9IjMyIiB5PSI0NCIgZm9udC1zaXplPSIyNyIgZmlsbD0iIzE3MmU0OSIgZm9udC13ZWlnaHQ9IjcwMCI+UmVzcGFsZG8gbMOzZ2ljbyB5IHJlc3BhbGRvIGbDrXNpY288L3RleHQ+PHRleHQgeD0iMzIiIHk9Ijc1IiBmb250LXNpemU9IjE3IiBmaWxsPSIjNTI2NzdkIiBmb250LXdlaWdodD0iNDAwIj5Mb3MgZG9zIGd1YXJkYW4gZGF0b3MsIHBlcm8gY29uIGZvcm1hdG9zIHkgcHJvcMOzc2l0b3MgZGlzdGludG9zLjwvdGV4dD48cmVjdCB4PSIzMiIgeT0iMTEwIiB3aWR0aD0iNDUyIiBoZWlnaHQ9IjIzNiIgcng9IjEyIiBmaWxsPSIjZWFmMWZjIiBzdHJva2U9IiMyNzVkYWQiIHN0cm9rZS13aWR0aD0iMS41Ii8+PHRleHQgeD0iNTIiIHk9IjE0NiIgZm9udC1zaXplPSIyMSIgZmlsbD0iIzI3NWRhZCIgZm9udC13ZWlnaHQ9IjY1MCI+UmVzcGFsZG8gbMOzZ2ljbzwvdGV4dD48dGV4dCB4PSI1MiIgeT0iMTc4IiBmb250LXNpemU9IjE3IiBmaWxsPSIjMjUzYzU1Ij5FeHBvcnRhIG9iamV0b3MgeSBkYXRvcyBlbiB1biBmb3JtYXRvIGxlZ2libGUuPC90ZXh0Pjx0ZXh0IHg9IjUyIiB5PSIyMTQiIGZvbnQtc2l6ZT0iMTciIGZpbGw9IiMyNTNjNTUiPjx0c3BhbiBmb250LXdlaWdodD0iNjAwIj5HZW5lcmFyIHNjcmlwdHM8L3RzcGFuPiDihpIgYXJjaGl2byAuc3FsPC90ZXh0Pjx0ZXh0IHg9IjUyIiB5PSIyNDIiIGZvbnQtc2l6ZT0iMTciIGZpbGw9IiMyNTNjNTUiPjx0c3BhbiBmb250LXdlaWdodD0iNjAwIj5zcWxjbWQ8L3RzcGFuPiDihpIgcmVzdWx0YWRvIGRlIHVuYSBjb25zdWx0YTwvdGV4dD48dGV4dCB4PSI1MiIgeT0iMjcwIiBmb250LXNpemU9IjE3IiBmaWxsPSIjMjUzYzU1Ij48dHNwYW4gZm9udC13ZWlnaHQ9IjYwMCI+YmNwPC90c3Bhbj4g4oaSIGRhdG9zIGRlIHVuYSB0YWJsYTwvdGV4dD48dGV4dCB4PSI1MiIgeT0iMzE2IiBmb250LXNpemU9IjE3IiBmaWxsPSIjMTcyZTQ5IiBmb250LXdlaWdodD0iNjAwIj5Vc286IG1pZ3JhY2lvbmVzIHkgY29waWFzIHBhcmNpYWxlcy48L3RleHQ+PHJlY3QgeD0iNTE2IiB5PSIxMTAiIHdpZHRoPSI0NTIiIGhlaWdodD0iMjM2IiByeD0iMTIiIGZpbGw9IiNlNWY1ZWYiIHN0cm9rZT0iIzA4N2M2MSIgc3Ryb2tlLXdpZHRoPSIxLjUiLz48dGV4dCB4PSI1MzYiIHk9IjE0NiIgZm9udC1zaXplPSIyMSIgZmlsbD0iIzA4N2M2MSIgZm9udC13ZWlnaHQ9IjY1MCI+UmVzcGFsZG8gZsOtc2ljbzwvdGV4dD48dGV4dCB4PSI1MzYiIHk9IjE3OCIgZm9udC1zaXplPSIxNyIgZmlsbD0iIzI1M2M1NSI+Q29waWEgbGFzIHDDoWdpbmFzIGRlIGxhIGJhc2UgeSBzdSByZWdpc3Ryby48L3RleHQ+PHRleHQgeD0iNTM2IiB5PSIyMTQiIGZvbnQtc2l6ZT0iMTciIGZpbGw9IiMyNTNjNTUiPjx0c3BhbiBmb250LXdlaWdodD0iNjAwIj5Db21wbGV0bzwvdHNwYW4+IOKGkiBhcmNoaXZvIC5iYWs8L3RleHQ+PHRleHQgeD0iNTM2IiB5PSIyNDIiIGZvbnQtc2l6ZT0iMTciIGZpbGw9IiMyNTNjNTUiPjx0c3BhbiBmb250LXdlaWdodD0iNjAwIj5EaWZlcmVuY2lhbDwvdHNwYW4+IOKGkiBhcmNoaXZvIC5iYWs8L3RleHQ+PHRleHQgeD0iNTM2IiB5PSIyNzAiIGZvbnQtc2l6ZT0iMTciIGZpbGw9IiMyNTNjNTUiPjx0c3BhbiBmb250LXdlaWdodD0iNjAwIj5Mb2c8L3RzcGFuPiDihpIgYXJjaGl2byAudHJuPC90ZXh0Pjx0ZXh0IHg9IjUzNiIgeT0iMzE2IiBmb250LXNpemU9IjE3IiBmaWxsPSIjMTcyZTQ5IiBmb250LXdlaWdodD0iNjAwIj5Vc286IHJlY3VwZXJhciBsYSBiYXNlIGNvbXBsZXRhLjwvdGV4dD48dGV4dCB4PSIzMiIgeT0iMzgyIiBmb250LXNpemU9IjE4IiBmaWxsPSIjMjUzYzU1Ij5VbiByZXNwYWxkbyBsw7NnaWNvIG5vIHJlZW1wbGF6YSBsYSBzZWN1ZW5jaWEgY29tcGxldG8g4oaSIGRpZmVyZW5jaWFsIOKGkiBsb2cuPC90ZXh0Pjx0ZXh0IHg9IjMyIiB5PSI0MDYiIGZvbnQtc2l6ZT0iMTUiIGZpbGw9IiM2MDc0OGEiIGZvbnQtd2VpZ2h0PSI0MDAiPk5vdGFzTGFiMDUgwrcgTGFib3JhdG9yaW8gNSDCtyBEaWFncmFtYSBjb25jZXB0dWFsPC90ZXh0PjwvZz48L3N2Zz4K" alt="Comparación entre respaldos lógicos y físicos." loading="lazy"/><figcaption>Comparación entre respaldos lógicos y físicos.</figcaption><button type="button" class="zoom-btn" onclick="openDiagram(this)">Ampliar diagrama</button></figure>
-<h3>Completo, diferencial e incremental</h3>
+<google-codelab-step label="Tipos de respaldo" duration="8">
+<p>Un <strong>respaldo lógico</strong> exporta datos y esquemas en un formato legible, como SQL, y se utiliza para migraciones o copias parciales. Un <strong>respaldo físico</strong> copia los archivos de la base y permite recuperarla completa.</p>
+<figure><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAwIDQwNCIgcm9sZT0iaW1nIiBhcmlhLWxhYmVsbGVkYnk9InRpdGxlIGRlc2MiPjx0aXRsZSBpZD0idGl0bGUiPlJlc3BhbGRvIGzDs2dpY28geSByZXNwYWxkbyBmw61zaWNvPC90aXRsZT48ZGVzYyBpZD0iZGVzYyI+RWwgbMOzZ2ljbyBleHBvcnRhIG9iamV0b3MgeSBkYXRvcyBsZWdpYmxlcyBjb24gR2VuZXJhciBzY3JpcHRzLCBzcWxjbWQgbyBiY3AuIEVsIGbDrXNpY28gY29waWEgbGFzIHDDoWdpbmFzIGRlIGxhIGJhc2UgZW4gYXJjaGl2b3MgLmJhayB5IC50cm4uPC9kZXNjPjxyZWN0IHdpZHRoPSIxMDAwIiBoZWlnaHQ9IjQwNCIgcng9IjE2IiBmaWxsPSIjZjhmYWZjIi8+PGcgZm9udC1mYW1pbHk9IlNlZ29lIFVJLEFyaWFsLHNhbnMtc2VyaWYiPjx0ZXh0IHg9IjMyIiB5PSI0NCIgZm9udC1zaXplPSIyNyIgZmlsbD0iIzE3MmU0OSIgZm9udC13ZWlnaHQ9IjcwMCI+UmVzcGFsZG8gbMOzZ2ljbyB5IHJlc3BhbGRvIGbDrXNpY288L3RleHQ+PHRleHQgeD0iMzIiIHk9Ijc1IiBmb250LXNpemU9IjE3IiBmaWxsPSIjNTI2NzdkIiBmb250LXdlaWdodD0iNDAwIj5Mb3MgZG9zIGd1YXJkYW4gZGF0b3MsIHBlcm8gY29uIGZvcm1hdG9zIHkgcHJvcMOzc2l0b3MgZGlzdGludG9zLjwvdGV4dD48cmVjdCB4PSIzMiIgeT0iMTEwIiB3aWR0aD0iNDUyIiBoZWlnaHQ9IjIzNiIgcng9IjEyIiBmaWxsPSIjZWFmMWZjIiBzdHJva2U9IiMyNzVkYWQiIHN0cm9rZS13aWR0aD0iMS41Ii8+PHRleHQgeD0iNTIiIHk9IjE0NiIgZm9udC1zaXplPSIyMSIgZmlsbD0iIzI3NWRhZCIgZm9udC13ZWlnaHQ9IjY1MCI+UmVzcGFsZG8gbMOzZ2ljbzwvdGV4dD48dGV4dCB4PSI1MiIgeT0iMTc4IiBmb250LXNpemU9IjE3IiBmaWxsPSIjMjUzYzU1Ij5FeHBvcnRhIG9iamV0b3MgeSBkYXRvcyBlbiB1biBmb3JtYXRvIGxlZ2libGUuPC90ZXh0Pjx0ZXh0IHg9IjUyIiB5PSIyMTQiIGZvbnQtc2l6ZT0iMTciIGZpbGw9IiMyNTNjNTUiPjx0c3BhbiBmb250LXdlaWdodD0iNjAwIj5HZW5lcmFyIHNjcmlwdHM8L3RzcGFuPiDihpIgYXJjaGl2byAuc3FsPC90ZXh0Pjx0ZXh0IHg9IjUyIiB5PSIyNDIiIGZvbnQtc2l6ZT0iMTciIGZpbGw9IiMyNTNjNTUiPjx0c3BhbiBmb250LXdlaWdodD0iNjAwIj5zcWxjbWQ8L3RzcGFuPiDihpIgcmVzdWx0YWRvIGRlIHVuYSBjb25zdWx0YTwvdGV4dD48dGV4dCB4PSI1MiIgeT0iMjcwIiBmb250LXNpemU9IjE3IiBmaWxsPSIjMjUzYzU1Ij48dHNwYW4gZm9udC13ZWlnaHQ9IjYwMCI+YmNwPC90c3Bhbj4g4oaSIGRhdG9zIGRlIHVuYSB0YWJsYTwvdGV4dD48dGV4dCB4PSI1MiIgeT0iMzE2IiBmb250LXNpemU9IjE3IiBmaWxsPSIjMTcyZTQ5IiBmb250LXdlaWdodD0iNjAwIj5Vc286IG1pZ3JhY2lvbmVzIHkgY29waWFzIHBhcmNpYWxlcy48L3RleHQ+PHJlY3QgeD0iNTE2IiB5PSIxMTAiIHdpZHRoPSI0NTIiIGhlaWdodD0iMjM2IiByeD0iMTIiIGZpbGw9IiNlNWY1ZWYiIHN0cm9rZT0iIzA4N2M2MSIgc3Ryb2tlLXdpZHRoPSIxLjUiLz48dGV4dCB4PSI1MzYiIHk9IjE0NiIgZm9udC1zaXplPSIyMSIgZmlsbD0iIzA4N2M2MSIgZm9udC13ZWlnaHQ9IjY1MCI+UmVzcGFsZG8gZsOtc2ljbzwvdGV4dD48dGV4dCB4PSI1MzYiIHk9IjE3OCIgZm9udC1zaXplPSIxNyIgZmlsbD0iIzI1M2M1NSI+Q29waWEgbGFzIHDDoWdpbmFzIGRlIGxhIGJhc2UgeSBzdSByZWdpc3Ryby48L3RleHQ+PHRleHQgeD0iNTM2IiB5PSIyMTQiIGZvbnQtc2l6ZT0iMTciIGZpbGw9IiMyNTNjNTUiPjx0c3BhbiBmb250LXdlaWdodD0iNjAwIj5Db21wbGV0bzwvdHNwYW4+IOKGkiBhcmNoaXZvIC5iYWs8L3RleHQ+PHRleHQgeD0iNTM2IiB5PSIyNDIiIGZvbnQtc2l6ZT0iMTciIGZpbGw9IiMyNTNjNTUiPjx0c3BhbiBmb250LXdlaWdodD0iNjAwIj5EaWZlcmVuY2lhbDwvdHNwYW4+IOKGkiBhcmNoaXZvIC5iYWs8L3RleHQ+PHRleHQgeD0iNTM2IiB5PSIyNzAiIGZvbnQtc2l6ZT0iMTciIGZpbGw9IiMyNTNjNTUiPjx0c3BhbiBmb250LXdlaWdodD0iNjAwIj5Mb2c8L3RzcGFuPiDihpIgYXJjaGl2byAudHJuPC90ZXh0Pjx0ZXh0IHg9IjUzNiIgeT0iMzE2IiBmb250LXNpemU9IjE3IiBmaWxsPSIjMTcyZTQ5IiBmb250LXdlaWdodD0iNjAwIj5Vc286IHJlY3VwZXJhciBsYSBiYXNlIGNvbXBsZXRhLjwvdGV4dD48dGV4dCB4PSIzMiIgeT0iMzgyIiBmb250LXNpemU9IjE4IiBmaWxsPSIjMjUzYzU1Ij5VbiByZXNwYWxkbyBsw7NnaWNvIG5vIHJlZW1wbGF6YSBsYSBzZWN1ZW5jaWEgY29tcGxldG8g4oaSIGRpZmVyZW5jaWFsIOKGkiBsb2cuPC90ZXh0PjwvZz48L3N2Zz4NCg==" alt="Comparación entre respaldos lógicos y físicos." loading="lazy"/><button type="button" class="zoom-btn" onclick="openDiagram(this)">Ampliar diagrama</button></figure>
+<p>Los respaldos físicos son de tres tipos:</p>
 <div class="table-scroll"><table>
 <thead>
 <tr>
 <th>Tipo</th>
 <th>Qué copia</th>
-<th>Ventaja</th>
-<th>Desventaja</th>
+<th>Para restaurar se necesita</th>
 </tr>
 </thead>
 <tbody><tr>
 <td><strong>Completo</strong></td>
-<td>El 100 % de los datos en un momento específico. Es la base de los demás tipos.</td>
-<td>Máxima seguridad y restauración sencilla.</td>
-<td>Consume más tiempo y espacio.</td>
+<td>El 100 % de los datos.</td>
+<td>Solo el completo.</td>
 </tr>
 <tr>
 <td><strong>Diferencial</strong></td>
-<td>Todo lo que cambió desde el <strong>último respaldo completo</strong>.</td>
-<td>Para restaurar bastan el último completo y el último diferencial.</td>
-<td>Su tamaño crece con cada respaldo hasta el siguiente completo.</td>
+<td>Lo que cambió desde el último completo.</td>
+<td>El completo y el último diferencial.</td>
 </tr>
 <tr>
 <td><strong>Incremental</strong></td>
-<td>Solo lo que cambió desde el <strong>último respaldo</strong>, completo o incremental.</td>
-<td>Ahorra tiempo y espacio en cada respaldo.</td>
-<td>Para restaurar se necesitan el completo y todos los incrementales posteriores.</td>
+<td>Lo que cambió desde el último respaldo.</td>
+<td>El completo y todos los incrementales posteriores.</td>
 </tr>
 </tbody></table></div>
-<figure><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAwIDUwMCIgcm9sZT0iaW1nIiBhcmlhLWxhYmVsbGVkYnk9InRpdGxlIGRlc2MiPjx0aXRsZSBpZD0idGl0bGUiPlF1w6kgY3VicmUgY2FkYSB0aXBvIGRlIHJlc3BhbGRvPC90aXRsZT48ZGVzYyBpZD0iZGVzYyI+RWwgY29tcGxldG8gY29waWEgdG9kYSBsYSBiYXNlIGVsIGRvbWluZ28uIENhZGEgZGlmZXJlbmNpYWwgaW5jbHV5ZSBsb3MgY2FtYmlvcyBkZXNkZSBlc2UgY29tcGxldG8geSBjcmVjZSBkw61hIGEgZMOtYS4gQ2FkYSByZXNwYWxkbyBpbmNyZW1lbnRhbCBvIGRlIGxvZyBpbmNsdXllIHNvbG8gbG8gb2N1cnJpZG8gZGVzZGUgZWwgYW50ZXJpb3IuPC9kZXNjPjxyZWN0IHdpZHRoPSIxMDAwIiBoZWlnaHQ9IjUwMCIgcng9IjE2IiBmaWxsPSIjZjhmYWZjIi8+PGcgZm9udC1mYW1pbHk9IlNlZ29lIFVJLEFyaWFsLHNhbnMtc2VyaWYiPjx0ZXh0IHg9IjMyIiB5PSI0NCIgZm9udC1zaXplPSIyNyIgZmlsbD0iIzE3MmU0OSIgZm9udC13ZWlnaHQ9IjcwMCI+UXXDqSBjdWJyZSBjYWRhIHRpcG8gZGUgcmVzcGFsZG88L3RleHQ+PHRleHQgeD0iMzIiIHk9Ijc1IiBmb250LXNpemU9IjE3IiBmaWxsPSIjNTI2NzdkIiBmb250LXdlaWdodD0iNDAwIj5FamVtcGxvIGRlIHVuYSBzZW1hbmE6IGNvbXBsZXRvIGVsIGRvbWluZ28sIGRpZmVyZW5jaWFsZXMgZGlhcmlvcyBlIGluY3JlbWVudGFsZXMgY2FkYSA2IGhvcmFzLjwvdGV4dD48ZyBmb250LXNpemU9IjE2IiBmaWxsPSIjNTI2NzdkIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LXdlaWdodD0iNjAwIj48dGV4dCB4PSIyMzAiIHk9IjExNiI+RG9tPC90ZXh0Pjx0ZXh0IHg9IjQwMCIgeT0iMTE2Ij5MdW48L3RleHQ+PHRleHQgeD0iNTcwIiB5PSIxMTYiPk1hcjwvdGV4dD48dGV4dCB4PSI3NDAiIHk9IjExNiI+TWnDqTwvdGV4dD48dGV4dCB4PSI5MTAiIHk9IjExNiI+SnVlPC90ZXh0PjwvZz48ZyBzdHJva2U9IiNjOWQ1ZTMiIHN0cm9rZS13aWR0aD0iMS41IiBzdHJva2UtZGFzaGFycmF5PSI1IDUiPjxwYXRoIGQ9Ik0gMjMwIDEyOCBMIDIzMCAzNzIiLz48cGF0aCBkPSJNIDQwMCAxMjggTCA0MDAgMzcyIi8+PHBhdGggZD0iTSA1NzAgMTI4IEwgNTcwIDM3MiIvPjxwYXRoIGQ9Ik0gNzQwIDEyOCBMIDc0MCAzNzIiLz48cGF0aCBkPSJNIDkxMCAxMjggTCA5MTAgMzcyIi8+PC9nPjx0ZXh0IHg9IjMyIiB5PSIxNjgiIGZvbnQtc2l6ZT0iMjAiIGZpbGw9IiMyNzVkYWQiIGZvbnQtd2VpZ2h0PSI3MDAiPkNvbXBsZXRvPC90ZXh0PjxyZWN0IHg9IjIxOCIgeT0iMTQ2IiB3aWR0aD0iMjQiIGhlaWdodD0iMzIiIHJ4PSI0IiBmaWxsPSIjMjc1ZGFkIi8+PHRleHQgeD0iMjU4IiB5PSIxNjgiIGZvbnQtc2l6ZT0iMTciIGZpbGw9IiMyNTNjNTUiPkNvcGlhIGVsIDEwMCAlIGRlIGxhIGJhc2UuPC90ZXh0Pjx0ZXh0IHg9IjMyIiB5PSIyMzIiIGZvbnQtc2l6ZT0iMjAiIGZpbGw9IiMwODdjNjEiIGZvbnQtd2VpZ2h0PSI3MDAiPkRpZmVyZW5jaWFsPC90ZXh0PjxyZWN0IHg9IjIzMCIgeT0iMjA0IiB3aWR0aD0iMTcwIiBoZWlnaHQ9IjEyIiByeD0iMyIgZmlsbD0iIzA4N2M2MSIgZmlsbC1vcGFjaXR5PSIwLjUiLz48cmVjdCB4PSIyMzAiIHk9IjIyMiIgd2lkdGg9IjM0MCIgaGVpZ2h0PSIxMiIgcng9IjMiIGZpbGw9IiMwODdjNjEiIGZpbGwtb3BhY2l0eT0iMC43MiIvPjxyZWN0IHg9IjIzMCIgeT0iMjQwIiB3aWR0aD0iNTEwIiBoZWlnaHQ9IjEyIiByeD0iMyIgZmlsbD0iIzA4N2M2MSIgZmlsbC1vcGFjaXR5PSIwLjk1Ii8+PHRleHQgeD0iMjMwIiB5PSIyODAiIGZvbnQtc2l6ZT0iMTYiIGZpbGw9IiMyNTNjNTUiPkNhZGEgdW5vIGluY2x1eWUgdG9kb3MgbG9zIGNhbWJpb3MgZGVzZGUgZWwgw7psdGltbyBjb21wbGV0bywgcG9yIGVzbyBjcmVjZS48L3RleHQ+PHRleHQgeD0iMzIiIHk9IjMzMCIgZm9udC1zaXplPSIyMCIgZmlsbD0iIzlhNWEwMCIgZm9udC13ZWlnaHQ9IjcwMCI+SW5jcmVtZW50YWw8L3RleHQ+PHRleHQgeD0iMzIiIHk9IjM1MiIgZm9udC1zaXplPSIxNSIgZmlsbD0iIzlhNWEwMCI+KGxvZyBlbiBTUUwgU2VydmVyKTwvdGV4dD48ZyBmaWxsPSIjZDA4YTFlIj48cmVjdCB4PSIyMzAiIHk9IjMxNCIgd2lkdGg9IjQwLjUiIGhlaWdodD0iMjIiIHJ4PSIzIi8+PHJlY3QgeD0iMzE1IiB5PSIzMTQiIHdpZHRoPSI0MC41IiBoZWlnaHQ9IjIyIiByeD0iMyIvPjxyZWN0IHg9IjQwMCIgeT0iMzE0IiB3aWR0aD0iNDAuNSIgaGVpZ2h0PSIyMiIgcng9IjMiLz48cmVjdCB4PSI0ODUiIHk9IjMxNCIgd2lkdGg9IjQwLjUiIGhlaWdodD0iMjIiIHJ4PSIzIi8+PHJlY3QgeD0iNTcwIiB5PSIzMTQiIHdpZHRoPSI0MC41IiBoZWlnaHQ9IjIyIiByeD0iMyIvPjxyZWN0IHg9IjY1NSIgeT0iMzE0IiB3aWR0aD0iNDAuNSIgaGVpZ2h0PSIyMiIgcng9IjMiLz48cmVjdCB4PSI3NDAiIHk9IjMxNCIgd2lkdGg9IjQwLjUiIGhlaWdodD0iMjIiIHJ4PSIzIi8+PHJlY3QgeD0iODI1IiB5PSIzMTQiIHdpZHRoPSI0MC41IiBoZWlnaHQ9IjIyIiByeD0iMyIvPjwvZz48ZyBmaWxsPSIjZWNjMjdjIj48cmVjdCB4PSIyNzIuNSIgeT0iMzE0IiB3aWR0aD0iNDAuNSIgaGVpZ2h0PSIyMiIgcng9IjMiLz48cmVjdCB4PSIzNTcuNSIgeT0iMzE0IiB3aWR0aD0iNDAuNSIgaGVpZ2h0PSIyMiIgcng9IjMiLz48cmVjdCB4PSI0NDIuNSIgeT0iMzE0IiB3aWR0aD0iNDAuNSIgaGVpZ2h0PSIyMiIgcng9IjMiLz48cmVjdCB4PSI1MjcuNSIgeT0iMzE0IiB3aWR0aD0iNDAuNSIgaGVpZ2h0PSIyMiIgcng9IjMiLz48cmVjdCB4PSI2MTIuNSIgeT0iMzE0IiB3aWR0aD0iNDAuNSIgaGVpZ2h0PSIyMiIgcng9IjMiLz48cmVjdCB4PSI2OTcuNSIgeT0iMzE0IiB3aWR0aD0iNDAuNSIgaGVpZ2h0PSIyMiIgcng9IjMiLz48cmVjdCB4PSI3ODIuNSIgeT0iMzE0IiB3aWR0aD0iNDAuNSIgaGVpZ2h0PSIyMiIgcng9IjMiLz48cmVjdCB4PSI4NjcuNSIgeT0iMzE0IiB3aWR0aD0iNDAuNSIgaGVpZ2h0PSIyMiIgcng9IjMiLz48L2c+PHRleHQgeD0iMjMwIiB5PSIzNjIiIGZvbnQtc2l6ZT0iMTYiIGZpbGw9IiMyNTNjNTUiPkNhZGEgdW5vIGluY2x1eWUgc29sbyBsbyBvY3VycmlkbyBkZXNkZSBlbCByZXNwYWxkbyBhbnRlcmlvci48L3RleHQ+PHJlY3QgeD0iMzIiIHk9IjM5MiIgd2lkdGg9IjkzNiIgaGVpZ2h0PSI1OCIgcng9IjEyIiBmaWxsPSIjZWFmMWZjIiBzdHJva2U9IiMyNzVkYWQiIHN0cm9rZS13aWR0aD0iMS41Ii8+PHRleHQgeD0iNTIiIHk9IjQyOCIgZm9udC1zaXplPSIxOCIgZmlsbD0iIzE3MmU0OSIgZm9udC13ZWlnaHQ9IjYwMCI+UGFyYSByZXN0YXVyYXI6IGNvbXBsZXRvLCDDumx0aW1vIGRpZmVyZW5jaWFsIGUgaW5jcmVtZW50YWxlcyBwb3N0ZXJpb3JlcywgZW4gb3JkZW4uPC90ZXh0Pjx0ZXh0IHg9IjMyIiB5PSI0ODIiIGZvbnQtc2l6ZT0iMTUiIGZpbGw9IiM2MDc0OGEiIGZvbnQtd2VpZ2h0PSI0MDAiPk5vdGFzTGFiMDUgwrcgTGFib3JhdG9yaW8gNSDCtyBEaWFncmFtYSBjb25jZXB0dWFsPC90ZXh0PjwvZz48L3N2Zz4K" alt="Qué cubre cada tipo de respaldo a lo largo de una semana." loading="lazy"/><figcaption>Qué cubre cada tipo de respaldo a lo largo de una semana.</figcaption><button type="button" class="zoom-btn" onclick="openDiagram(this)">Ampliar diagrama</button></figure>
-<h3>Los tipos en SQL Server</h3>
-<p>SQL Server no tiene un respaldo llamado incremental. <strong>El respaldo del registro de transacciones, o respaldo de log, cumple esa función</strong>: guarda las transacciones registradas desde el respaldo de log anterior y permite recuperar la base hasta un punto en el tiempo.</p>
-<div class="table-scroll"><table>
-<thead>
-<tr>
-<th>Tipo</th>
-<th>Instrucción</th>
-<th>Archivo de la guía</th>
-</tr>
-</thead>
-<tbody><tr>
-<td>Completo</td>
-<td><code>BACKUP DATABASE</code></td>
-<td><code>NotasLab05_full.bak</code></td>
-</tr>
-<tr>
-<td>Diferencial</td>
-<td><code>BACKUP DATABASE ... WITH DIFFERENTIAL</code></td>
-<td><code>NotasLab05_diff.bak</code></td>
-</tr>
-<tr>
-<td>Log</td>
-<td><code>BACKUP LOG</code></td>
-<td><code>NotasLab05_log.trn</code></td>
-</tr>
-</tbody></table></div>
-<h3>Modelo de recuperación</h3>
-<p>El <strong>modelo de recuperación</strong> de una base determina cómo conserva SQL Server su registro de transacciones:</p>
-<ul>
-<li><strong>SIMPLE:</strong> SQL Server reutiliza el espacio del registro automáticamente. No admite <code>BACKUP LOG</code>, así que solo se puede volver al último completo o diferencial.</li>
-<li><strong>FULL:</strong> el registro conserva las transacciones hasta que se respaldan. Admite respaldos de log.</li>
-</ul>
-<p>Esta consulta muestra el modelo de cada base del servidor:</p>
-<div class="code-container"><div class="code-toolbar"><span>SQL</span><button type="button" class="copy-btn" onclick="copyCode(this)">Copiar código</button></div><pre><code class="language-sql">SELECT name AS Base, recovery_model_desc AS Modelo
-FROM sys.databases
-ORDER BY name;
-GO
-</code></pre></div>
-<p>Una base nueva toma el modelo de la base del sistema <code>model</code>. Por eso, el ejemplo fija <code>FULL</code> de forma explícita.</p>
-<aside class="learning-tip" role="note">
-<p><strong>Consejo:</strong> si una base está en <code>SIMPLE</code>, <code>BACKUP LOG</code> termina con el error <code>4208</code>. Después de cambiarla a <code>FULL</code> se necesita un respaldo completo para iniciar la cadena de respaldos de log.</p>
-</aside>
+<figure><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAwIDQ3MiIgcm9sZT0iaW1nIiBhcmlhLWxhYmVsbGVkYnk9InRpdGxlIGRlc2MiPjx0aXRsZSBpZD0idGl0bGUiPlF1w6kgY3VicmUgY2FkYSB0aXBvIGRlIHJlc3BhbGRvPC90aXRsZT48ZGVzYyBpZD0iZGVzYyI+RWwgY29tcGxldG8gY29waWEgdG9kYSBsYSBiYXNlIGVsIGRvbWluZ28uIENhZGEgZGlmZXJlbmNpYWwgaW5jbHV5ZSBsb3MgY2FtYmlvcyBkZXNkZSBlc2UgY29tcGxldG8geSBjcmVjZSBkw61hIGEgZMOtYS4gQ2FkYSByZXNwYWxkbyBpbmNyZW1lbnRhbCBvIGRlIGxvZyBpbmNsdXllIHNvbG8gbG8gb2N1cnJpZG8gZGVzZGUgZWwgYW50ZXJpb3IuPC9kZXNjPjxyZWN0IHdpZHRoPSIxMDAwIiBoZWlnaHQ9IjQ3MiIgcng9IjE2IiBmaWxsPSIjZjhmYWZjIi8+PGcgZm9udC1mYW1pbHk9IlNlZ29lIFVJLEFyaWFsLHNhbnMtc2VyaWYiPjx0ZXh0IHg9IjMyIiB5PSI0NCIgZm9udC1zaXplPSIyNyIgZmlsbD0iIzE3MmU0OSIgZm9udC13ZWlnaHQ9IjcwMCI+UXXDqSBjdWJyZSBjYWRhIHRpcG8gZGUgcmVzcGFsZG88L3RleHQ+PHRleHQgeD0iMzIiIHk9Ijc1IiBmb250LXNpemU9IjE3IiBmaWxsPSIjNTI2NzdkIiBmb250LXdlaWdodD0iNDAwIj5FamVtcGxvIGRlIHVuYSBzZW1hbmE6IGNvbXBsZXRvIGVsIGRvbWluZ28sIGRpZmVyZW5jaWFsZXMgZGlhcmlvcyBlIGluY3JlbWVudGFsZXMgY2FkYSA2IGhvcmFzLjwvdGV4dD48ZyBmb250LXNpemU9IjE2IiBmaWxsPSIjNTI2NzdkIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LXdlaWdodD0iNjAwIj48dGV4dCB4PSIyMzAiIHk9IjExNiI+RG9tPC90ZXh0Pjx0ZXh0IHg9IjQwMCIgeT0iMTE2Ij5MdW48L3RleHQ+PHRleHQgeD0iNTcwIiB5PSIxMTYiPk1hcjwvdGV4dD48dGV4dCB4PSI3NDAiIHk9IjExNiI+TWnDqTwvdGV4dD48dGV4dCB4PSI5MTAiIHk9IjExNiI+SnVlPC90ZXh0PjwvZz48ZyBzdHJva2U9IiNjOWQ1ZTMiIHN0cm9rZS13aWR0aD0iMS41IiBzdHJva2UtZGFzaGFycmF5PSI1IDUiPjxwYXRoIGQ9Ik0gMjMwIDEyOCBMIDIzMCAzNzIiLz48cGF0aCBkPSJNIDQwMCAxMjggTCA0MDAgMzcyIi8+PHBhdGggZD0iTSA1NzAgMTI4IEwgNTcwIDM3MiIvPjxwYXRoIGQ9Ik0gNzQwIDEyOCBMIDc0MCAzNzIiLz48cGF0aCBkPSJNIDkxMCAxMjggTCA5MTAgMzcyIi8+PC9nPjx0ZXh0IHg9IjMyIiB5PSIxNjgiIGZvbnQtc2l6ZT0iMjAiIGZpbGw9IiMyNzVkYWQiIGZvbnQtd2VpZ2h0PSI3MDAiPkNvbXBsZXRvPC90ZXh0PjxyZWN0IHg9IjIxOCIgeT0iMTQ2IiB3aWR0aD0iMjQiIGhlaWdodD0iMzIiIHJ4PSI0IiBmaWxsPSIjMjc1ZGFkIi8+PHRleHQgeD0iMjU4IiB5PSIxNjgiIGZvbnQtc2l6ZT0iMTciIGZpbGw9IiMyNTNjNTUiPkNvcGlhIGVsIDEwMCAlIGRlIGxhIGJhc2UuPC90ZXh0Pjx0ZXh0IHg9IjMyIiB5PSIyMzIiIGZvbnQtc2l6ZT0iMjAiIGZpbGw9IiMwODdjNjEiIGZvbnQtd2VpZ2h0PSI3MDAiPkRpZmVyZW5jaWFsPC90ZXh0PjxyZWN0IHg9IjIzMCIgeT0iMjA0IiB3aWR0aD0iMTcwIiBoZWlnaHQ9IjEyIiByeD0iMyIgZmlsbD0iIzA4N2M2MSIgZmlsbC1vcGFjaXR5PSIwLjUiLz48cmVjdCB4PSIyMzAiIHk9IjIyMiIgd2lkdGg9IjM0MCIgaGVpZ2h0PSIxMiIgcng9IjMiIGZpbGw9IiMwODdjNjEiIGZpbGwtb3BhY2l0eT0iMC43MiIvPjxyZWN0IHg9IjIzMCIgeT0iMjQwIiB3aWR0aD0iNTEwIiBoZWlnaHQ9IjEyIiByeD0iMyIgZmlsbD0iIzA4N2M2MSIgZmlsbC1vcGFjaXR5PSIwLjk1Ii8+PHRleHQgeD0iMjMwIiB5PSIyODAiIGZvbnQtc2l6ZT0iMTYiIGZpbGw9IiMyNTNjNTUiPkNhZGEgdW5vIGluY2x1eWUgdG9kb3MgbG9zIGNhbWJpb3MgZGVzZGUgZWwgw7psdGltbyBjb21wbGV0bywgcG9yIGVzbyBjcmVjZS48L3RleHQ+PHRleHQgeD0iMzIiIHk9IjMzMCIgZm9udC1zaXplPSIyMCIgZmlsbD0iIzlhNWEwMCIgZm9udC13ZWlnaHQ9IjcwMCI+SW5jcmVtZW50YWw8L3RleHQ+PHRleHQgeD0iMzIiIHk9IjM1MiIgZm9udC1zaXplPSIxNSIgZmlsbD0iIzlhNWEwMCI+KGxvZyBlbiBTUUwgU2VydmVyKTwvdGV4dD48ZyBmaWxsPSIjZDA4YTFlIj48cmVjdCB4PSIyMzAiIHk9IjMxNCIgd2lkdGg9IjQwLjUiIGhlaWdodD0iMjIiIHJ4PSIzIi8+PHJlY3QgeD0iMzE1IiB5PSIzMTQiIHdpZHRoPSI0MC41IiBoZWlnaHQ9IjIyIiByeD0iMyIvPjxyZWN0IHg9IjQwMCIgeT0iMzE0IiB3aWR0aD0iNDAuNSIgaGVpZ2h0PSIyMiIgcng9IjMiLz48cmVjdCB4PSI0ODUiIHk9IjMxNCIgd2lkdGg9IjQwLjUiIGhlaWdodD0iMjIiIHJ4PSIzIi8+PHJlY3QgeD0iNTcwIiB5PSIzMTQiIHdpZHRoPSI0MC41IiBoZWlnaHQ9IjIyIiByeD0iMyIvPjxyZWN0IHg9IjY1NSIgeT0iMzE0IiB3aWR0aD0iNDAuNSIgaGVpZ2h0PSIyMiIgcng9IjMiLz48cmVjdCB4PSI3NDAiIHk9IjMxNCIgd2lkdGg9IjQwLjUiIGhlaWdodD0iMjIiIHJ4PSIzIi8+PHJlY3QgeD0iODI1IiB5PSIzMTQiIHdpZHRoPSI0MC41IiBoZWlnaHQ9IjIyIiByeD0iMyIvPjwvZz48ZyBmaWxsPSIjZWNjMjdjIj48cmVjdCB4PSIyNzIuNSIgeT0iMzE0IiB3aWR0aD0iNDAuNSIgaGVpZ2h0PSIyMiIgcng9IjMiLz48cmVjdCB4PSIzNTcuNSIgeT0iMzE0IiB3aWR0aD0iNDAuNSIgaGVpZ2h0PSIyMiIgcng9IjMiLz48cmVjdCB4PSI0NDIuNSIgeT0iMzE0IiB3aWR0aD0iNDAuNSIgaGVpZ2h0PSIyMiIgcng9IjMiLz48cmVjdCB4PSI1MjcuNSIgeT0iMzE0IiB3aWR0aD0iNDAuNSIgaGVpZ2h0PSIyMiIgcng9IjMiLz48cmVjdCB4PSI2MTIuNSIgeT0iMzE0IiB3aWR0aD0iNDAuNSIgaGVpZ2h0PSIyMiIgcng9IjMiLz48cmVjdCB4PSI2OTcuNSIgeT0iMzE0IiB3aWR0aD0iNDAuNSIgaGVpZ2h0PSIyMiIgcng9IjMiLz48cmVjdCB4PSI3ODIuNSIgeT0iMzE0IiB3aWR0aD0iNDAuNSIgaGVpZ2h0PSIyMiIgcng9IjMiLz48cmVjdCB4PSI4NjcuNSIgeT0iMzE0IiB3aWR0aD0iNDAuNSIgaGVpZ2h0PSIyMiIgcng9IjMiLz48L2c+PHRleHQgeD0iMjMwIiB5PSIzNjIiIGZvbnQtc2l6ZT0iMTYiIGZpbGw9IiMyNTNjNTUiPkNhZGEgdW5vIGluY2x1eWUgc29sbyBsbyBvY3VycmlkbyBkZXNkZSBlbCByZXNwYWxkbyBhbnRlcmlvci48L3RleHQ+PHJlY3QgeD0iMzIiIHk9IjM5MiIgd2lkdGg9IjkzNiIgaGVpZ2h0PSI1OCIgcng9IjEyIiBmaWxsPSIjZWFmMWZjIiBzdHJva2U9IiMyNzVkYWQiIHN0cm9rZS13aWR0aD0iMS41Ii8+PHRleHQgeD0iNTIiIHk9IjQyOCIgZm9udC1zaXplPSIxOCIgZmlsbD0iIzE3MmU0OSIgZm9udC13ZWlnaHQ9IjYwMCI+UGFyYSByZXN0YXVyYXI6IGNvbXBsZXRvLCDDumx0aW1vIGRpZmVyZW5jaWFsIGUgaW5jcmVtZW50YWxlcyBwb3N0ZXJpb3JlcywgZW4gb3JkZW4uPC90ZXh0PjwvZz48L3N2Zz4NCg==" alt="Qué cubre cada tipo de respaldo a lo largo de una semana." loading="lazy"/><button type="button" class="zoom-btn" onclick="openDiagram(this)">Ampliar diagrama</button></figure>
+<p>En SQL Server, <strong>el respaldo del registro de transacciones (<code>BACKUP LOG</code>) cumple la función del incremental</strong>. Requiere que la base esté en el modelo de recuperación <code>FULL</code>; en <code>SIMPLE</code> termina con el error <code>4208</code>.</p>
 </google-codelab-step>
-<google-codelab-step label="Preparar el entorno" duration="8">
-<p>Los ejemplos se ejecutan en el contenedor de la clase, <code>sqlserver-2025</code>, desde SSMS con el login <code>sa</code>.</p>
-<h3>1. Verificar el contenedor</h3>
-<p>Desde PowerShell:</p>
-<div class="code-container"><div class="code-toolbar"><span>POWERSHELL</span><button type="button" class="copy-btn" onclick="copyCode(this)">Copiar código</button></div><pre><code class="language-powershell">docker ps --filter &quot;name=sqlserver-2025&quot;
-</code></pre></div>
-<p>La columna <code>STATUS</code> debe comenzar con <code>Up</code>. Si el contenedor no aparece, se levanta desde la carpeta del <code>docker-compose.yml</code> con <code>docker compose up -d</code>.</p>
-<h3>2. Crear la carpeta de respaldos</h3>
-<p>Dentro del contenedor, SQL Server se ejecuta en Linux, por lo que los respaldos utilizan rutas de Linux en lugar de <code>C:\backups</code>. El <code>docker-compose.yml</code> de la clase monta el volumen <code>sqlserver_backup</code> en <code>/backup</code>. Estos comandos crean la carpeta de la guía y muestran su propietario:</p>
+<google-codelab-step label="Respaldar y restaurar" duration="15">
+<p>El ejemplo crea seis calificaciones, las respalda con los tres tipos de respaldo físico, simula la pérdida de la base y la restaura.</p>
+<figure><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAwIDQyMiIgcm9sZT0iaW1nIiBhcmlhLWxhYmVsbGVkYnk9InRpdGxlIGRlc2MiPjx0aXRsZSBpZD0idGl0bGUiPkxhIHNlY3VlbmNpYSBkZSBlc3RhIGd1w61hPC90aXRsZT48ZGVzYyBpZD0iZGVzYyI+U2UgY3JlYW4gc2VpcyBjYWxpZmljYWNpb25lcywgdW4gcmVzcGFsZG8gY29tcGxldG8sIGxhcyBjYWxpZmljYWNpb25lcyA3IHkgOCwgdW4gZGlmZXJlbmNpYWwsIGxhIDkgeSBsYSBjb3JyZWNjacOzbiBkZSBsYSAyLCB1biByZXNwYWxkbyBkZSBsb2cgeSBsYSBjYWxpZmljYWNpw7NuIDEwLiBEZXNwdcOpcyBvY3VycmUgbGEgZmFsbGEgeSBsYSBjYWxpZmljYWNpw7NuIDEwIHF1ZWRhIHNpbiByZXNwYWxkby48L2Rlc2M+PGRlZnM+PG1hcmtlciBpZD0iYSIgdmlld0JveD0iMCAwIDEwIDEwIiByZWZYPSI5IiByZWZZPSI1IiBtYXJrZXJXaWR0aD0iOCIgbWFya2VySGVpZ2h0PSI4IiBvcmllbnQ9ImF1dG8tc3RhcnQtcmV2ZXJzZSI+PHBhdGggZD0iTSAwIDAgTCAxMCA1IEwgMCAxMCBaIiBmaWxsPSIjNDI2MTdmIi8+PC9tYXJrZXI+PC9kZWZzPjxyZWN0IHdpZHRoPSIxMDAwIiBoZWlnaHQ9IjQyMiIgcng9IjE2IiBmaWxsPSIjZjhmYWZjIi8+PGcgZm9udC1mYW1pbHk9IlNlZ29lIFVJLEFyaWFsLHNhbnMtc2VyaWYiPjx0ZXh0IHg9IjMyIiB5PSI0NCIgZm9udC1zaXplPSIyNyIgZmlsbD0iIzE3MmU0OSIgZm9udC13ZWlnaHQ9IjcwMCI+TGEgc2VjdWVuY2lhIGRlIGVzdGEgZ3XDrWE8L3RleHQ+PHRleHQgeD0iMzIiIHk9Ijc1IiBmb250LXNpemU9IjE3IiBmaWxsPSIjNTI2NzdkIiBmb250LXdlaWdodD0iNDAwIj5BcnJpYmEsIGxvcyBjYW1iaW9zIGVuIGxhcyBjYWxpZmljYWNpb25lcy4gQWJham8sIGxvcyByZXNwYWxkb3MgcXVlIGxvcyBjb25zZXJ2YW4uPC90ZXh0PjxyZWN0IHg9IjcyNiIgeT0iMTg2IiB3aWR0aD0iMTc2IiBoZWlnaHQ9IjI4IiBmaWxsPSIjZmJlOWUyIi8+PHBhdGggZD0iTSA0MCAyMDAgTCA5NjAgMjAwIiBmaWxsPSJub25lIiBzdHJva2U9IiM0MjYxN2YiIHN0cm9rZS13aWR0aD0iMyIgbWFya2VyLWVuZD0idXJsKCNhKSIvPjxnIGZvbnQtc2l6ZT0iMTYiIGZpbGw9IiMyNTNjNTUiIHRleHQtYW5jaG9yPSJtaWRkbGUiPjxjaXJjbGUgY3g9IjgwIiBjeT0iMjAwIiByPSI5IiBmaWxsPSIjNDI2MTdmIi8+PHRleHQgeD0iODAiIHk9IjE1MCIgZm9udC13ZWlnaHQ9IjYwMCI+QmFzZSBjcmVhZGE8L3RleHQ+PHRleHQgeD0iODAiIHk9IjE3MiI+bm90YXMgMSBhIDY8L3RleHQ+PGNpcmNsZSBjeD0iMzIwIiBjeT0iMjAwIiByPSI5IiBmaWxsPSIjNDI2MTdmIi8+PHRleHQgeD0iMzIwIiB5PSIxNzIiPm5vdGFzIDcgeSA4PC90ZXh0PjxjaXJjbGUgY3g9IjU4MCIgY3k9IjIwMCIgcj0iOSIgZmlsbD0iIzQyNjE3ZiIvPjx0ZXh0IHg9IjU4MCIgeT0iMTUwIj5ub3RhIDkgeTwvdGV4dD48dGV4dCB4PSI1ODAiIHk9IjE3MiI+Y29ycmVjY2nDs24gZGUgbGEgMjwvdGV4dD48Y2lyY2xlIGN4PSI4MzAiIGN5PSIyMDAiIHI9IjkiIGZpbGw9IiNiNTQ4MmEiLz48dGV4dCB4PSI4MzAiIHk9IjE3MiIgZmlsbD0iI2I1NDgyYSIgZm9udC13ZWlnaHQ9IjYwMCI+bm90YSAxMDwvdGV4dD48L2c+PGNpcmNsZSBjeD0iOTIwIiBjeT0iMjAwIiByPSIxNiIgZmlsbD0iI2I1NDgyYSIvPjxwYXRoIGQ9Ik0gOTEzIDE5MyBMIDkyNyAyMDcgTSA5MjcgMTkzIEwgOTEzIDIwNyIgc3Ryb2tlPSIjZmZmZmZmIiBzdHJva2Utd2lkdGg9IjMiLz48dGV4dCB4PSI5MjAiIHk9IjE1MCIgZm9udC1zaXplPSIxNiIgZmlsbD0iI2I1NDgyYSIgZm9udC13ZWlnaHQ9IjcwMCIgdGV4dC1hbmNob3I9Im1pZGRsZSI+RmFsbGE8L3RleHQ+PHRleHQgeD0iOTIwIiB5PSIxNzIiIGZvbnQtc2l6ZT0iMTQiIGZpbGw9IiNiNTQ4MmEiIHRleHQtYW5jaG9yPSJtaWRkbGUiPkRST1AgREFUQUJBU0U8L3RleHQ+PGcgdGV4dC1hbmNob3I9Im1pZGRsZSI+PHJlY3QgeD0iMTg4IiB5PSIxODgiIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgcng9IjQiIGZpbGw9IiMyNzVkYWQiLz48dGV4dCB4PSIyMDAiIHk9IjI0NCIgZm9udC1zaXplPSIxOCIgZmlsbD0iIzI3NWRhZCIgZm9udC13ZWlnaHQ9IjcwMCI+Q29tcGxldG88L3RleHQ+PHRleHQgeD0iMjAwIiB5PSIyNjYiIGZvbnQtc2l6ZT0iMTQiIGZpbGw9IiM1MjY3N2QiPk5vdGFzTGFiMDVfZnVsbC5iYWs8L3RleHQ+PHJlY3QgeD0iNDM4IiB5PSIxODgiIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgcng9IjQiIGZpbGw9IiMwODdjNjEiLz48dGV4dCB4PSI0NTAiIHk9IjI0NCIgZm9udC1zaXplPSIxOCIgZmlsbD0iIzA4N2M2MSIgZm9udC13ZWlnaHQ9IjcwMCI+RGlmZXJlbmNpYWw8L3RleHQ+PHRleHQgeD0iNDUwIiB5PSIyNjYiIGZvbnQtc2l6ZT0iMTQiIGZpbGw9IiM1MjY3N2QiPk5vdGFzTGFiMDVfZGlmZi5iYWs8L3RleHQ+PHJlY3QgeD0iNzA4IiB5PSIxODgiIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgcng9IjQiIGZpbGw9IiM5YTVhMDAiLz48dGV4dCB4PSI3MjAiIHk9IjI0NCIgZm9udC1zaXplPSIxOCIgZmlsbD0iIzlhNWEwMCIgZm9udC13ZWlnaHQ9IjcwMCI+TG9nPC90ZXh0Pjx0ZXh0IHg9IjcyMCIgeT0iMjY2IiBmb250LXNpemU9IjE0IiBmaWxsPSIjNTI2NzdkIj5Ob3Rhc0xhYjA1X2xvZy50cm48L3RleHQ+PC9nPjx0ZXh0IHg9IjgxNCIgeT0iMzAwIiBmb250LXNpemU9IjE1IiBmaWxsPSIjYjU0ODJhIiBmb250LXdlaWdodD0iNjAwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5TaW4gcmVzcGFsZG86IHNlIHBpZXJkZTwvdGV4dD48cmVjdCB4PSIzMiIgeT0iMzMwIiB3aWR0aD0iOTM2IiBoZWlnaHQ9IjcwIiByeD0iMTIiIGZpbGw9IiNlNWY1ZWYiIHN0cm9rZT0iIzA4N2M2MSIgc3Ryb2tlLXdpZHRoPSIxLjUiLz48dGV4dCB4PSI1MiIgeT0iMzYwIiBmb250LXNpemU9IjE4IiBmaWxsPSIjMTcyZTQ5IiBmb250LXdlaWdodD0iNjAwIj5EZXNwdcOpcyBkZSByZXN0YXVyYXIgcXVlZGFuIDkgY2FsaWZpY2FjaW9uZXM6IGxhIDIgY29ycmVnaWRhIHkgc2luIGxhIDEwLjwvdGV4dD48dGV4dCB4PSI1MiIgeT0iMzg2IiBmb250LXNpemU9IjE2IiBmaWxsPSIjMjUzYzU1Ij5MYSBjYWxpZmljYWNpw7NuIDEwIGVzIGxhIHDDqXJkaWRhIHF1ZSBtaWRlIGVsIFJQTy48L3RleHQ+PC9nPjwvc3ZnPg0K" alt="Secuencia de cambios y respaldos de NotasLab05." loading="lazy"/><button type="button" class="zoom-btn" onclick="openDiagram(this)">Ampliar diagrama</button></figure>
+<h3>1. Preparar la base</h3>
+<p>Los respaldos se guardan en el volumen <code>/backup</code> del contenedor de la clase. Desde PowerShell se crea la carpeta del ejemplo:</p>
 <div class="code-container"><div class="code-toolbar"><span>POWERSHELL</span><button type="button" class="copy-btn" onclick="copyCode(this)">Copiar código</button></div><pre><code class="language-powershell">docker exec sqlserver-2025 mkdir -p /backup/NotasLab05
 docker exec sqlserver-2025 ls -ld /backup/NotasLab05
 </code></pre></div>
-<p>El segundo comando debe mostrar la carpeta con propietario <code>mssql</code>, la cuenta que ejecuta SQL Server en el contenedor. Si aparece <code>Permission denied</code> o <code>No such file or directory</code>, hay que revisar que el <code>docker-compose.yml</code> incluya <code>sqlserver_backup:/backup</code>.</p>
-<aside class="learning-tip" role="note">
-<p><strong>Consejo:</strong> <code>/backup</code> es un volumen de Docker y no aparece en el Explorador de Windows. Para guardar una copia en el equipo se utiliza <code>docker cp</code>, por ejemplo <code>docker cp sqlserver-2025:/backup/NotasLab05/NotasLab05_full.bak .</code>. Conservar los respaldos solo en el mismo servidor no protege contra la pérdida de ese servidor.</p>
-</aside>
-<h3>3. Crear la base de ejemplo</h3>
-<p><code>NotasLab05</code> contiene una tabla con seis calificaciones ficticias:</p>
+<p>En SSMS se crea la base en el modelo <code>FULL</code>, con seis calificaciones:</p>
 <div class="code-container"><div class="code-toolbar"><span>SQL</span><button type="button" class="copy-btn" onclick="copyCode(this)">Copiar código</button></div><pre><code class="language-sql">USE master;
 GO
 CREATE DATABASE NotasLab05;
@@ -369,327 +216,109 @@ GO
 USE NotasLab05;
 GO
 CREATE TABLE dbo.Calificacion (
-    calificacion_id INT NOT NULL,
-    carnet CHAR(8) NOT NULL,
+    calificacion_id INT PRIMARY KEY,
     estudiante NVARCHAR(60) NOT NULL,
-    materia NVARCHAR(60) NOT NULL,
-    nota DECIMAL(4,2) NOT NULL,
-    CONSTRAINT PK_Calificacion PRIMARY KEY (calificacion_id)
+    nota DECIMAL(4,2) NOT NULL
 );
-INSERT INTO dbo.Calificacion (calificacion_id, carnet, estudiante, materia, nota)
-VALUES (1, &#39;00010126&#39;, N&#39;Ana Martínez&#39;, N&#39;Bases de Datos&#39;, 8.50),
-       (2, &#39;00020226&#39;, N&#39;Luis Hernández&#39;, N&#39;Bases de Datos&#39;, 6.75),
-       (3, &#39;00030326&#39;, N&#39;María López&#39;, N&#39;Redes de Computadoras&#39;, 9.25),
-       (4, &#39;00040426&#39;, N&#39;Carlos Rivas&#39;, N&#39;Redes de Computadoras&#39;, 7.00),
-       (5, &#39;00050526&#39;, N&#39;Sofía Pérez&#39;, N&#39;Programación&#39;, 8.00),
-       (6, &#39;00060626&#39;, N&#39;Jorge Ramírez&#39;, N&#39;Programación&#39;, 5.50);
-GO
-SELECT calificacion_id, estudiante, materia, nota
-FROM dbo.Calificacion
-ORDER BY calificacion_id;
+INSERT INTO dbo.Calificacion (calificacion_id, estudiante, nota)
+VALUES (1, N&#39;Ana Martínez&#39;, 8.50), (2, N&#39;Luis Hernández&#39;, 6.75),
+       (3, N&#39;María López&#39;, 9.25), (4, N&#39;Carlos Rivas&#39;, 7.00),
+       (5, N&#39;Sofía Pérez&#39;, 8.00), (6, N&#39;Jorge Ramírez&#39;, 5.50);
 GO
 </code></pre></div>
-<p>La consulta devuelve <strong>seis calificaciones</strong>. Los cambios posteriores permitirán identificar qué conserva cada respaldo.</p>
-<aside class="learning-tip" role="note">
-<p><strong>Consejo:</strong> si <code>NotasLab05</code> ya existe por un intento anterior, la limpieza opcional del final de la guía permite empezar de nuevo.</p>
-</aside>
-</google-codelab-step>
-<google-codelab-step label="Respaldos físicos" duration="18">
-<p>La secuencia combina los tres tipos de respaldo físico. Entre un respaldo y el siguiente se registran cambios en las calificaciones.</p>
-<figure><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAwIDQ1MCIgcm9sZT0iaW1nIiBhcmlhLWxhYmVsbGVkYnk9InRpdGxlIGRlc2MiPjx0aXRsZSBpZD0idGl0bGUiPkxhIHNlY3VlbmNpYSBkZSBlc3RhIGd1w61hPC90aXRsZT48ZGVzYyBpZD0iZGVzYyI+U2UgY3JlYW4gc2VpcyBjYWxpZmljYWNpb25lcywgdW4gcmVzcGFsZG8gY29tcGxldG8sIGxhcyBjYWxpZmljYWNpb25lcyA3IHkgOCwgdW4gZGlmZXJlbmNpYWwsIGxhIDkgeSBsYSBjb3JyZWNjacOzbiBkZSBsYSAyLCB1biByZXNwYWxkbyBkZSBsb2cgeSBsYSBjYWxpZmljYWNpw7NuIDEwLiBEZXNwdcOpcyBvY3VycmUgbGEgZmFsbGEgeSBsYSBjYWxpZmljYWNpw7NuIDEwIHF1ZWRhIHNpbiByZXNwYWxkby48L2Rlc2M+PGRlZnM+PG1hcmtlciBpZD0iYSIgdmlld0JveD0iMCAwIDEwIDEwIiByZWZYPSI5IiByZWZZPSI1IiBtYXJrZXJXaWR0aD0iOCIgbWFya2VySGVpZ2h0PSI4IiBvcmllbnQ9ImF1dG8tc3RhcnQtcmV2ZXJzZSI+PHBhdGggZD0iTSAwIDAgTCAxMCA1IEwgMCAxMCBaIiBmaWxsPSIjNDI2MTdmIi8+PC9tYXJrZXI+PC9kZWZzPjxyZWN0IHdpZHRoPSIxMDAwIiBoZWlnaHQ9IjQ1MCIgcng9IjE2IiBmaWxsPSIjZjhmYWZjIi8+PGcgZm9udC1mYW1pbHk9IlNlZ29lIFVJLEFyaWFsLHNhbnMtc2VyaWYiPjx0ZXh0IHg9IjMyIiB5PSI0NCIgZm9udC1zaXplPSIyNyIgZmlsbD0iIzE3MmU0OSIgZm9udC13ZWlnaHQ9IjcwMCI+TGEgc2VjdWVuY2lhIGRlIGVzdGEgZ3XDrWE8L3RleHQ+PHRleHQgeD0iMzIiIHk9Ijc1IiBmb250LXNpemU9IjE3IiBmaWxsPSIjNTI2NzdkIiBmb250LXdlaWdodD0iNDAwIj5BcnJpYmEsIGxvcyBjYW1iaW9zIGVuIGxhcyBjYWxpZmljYWNpb25lcy4gQWJham8sIGxvcyByZXNwYWxkb3MgcXVlIGxvcyBjb25zZXJ2YW4uPC90ZXh0PjxyZWN0IHg9IjcyNiIgeT0iMTg2IiB3aWR0aD0iMTc2IiBoZWlnaHQ9IjI4IiBmaWxsPSIjZmJlOWUyIi8+PHBhdGggZD0iTSA0MCAyMDAgTCA5NjAgMjAwIiBmaWxsPSJub25lIiBzdHJva2U9IiM0MjYxN2YiIHN0cm9rZS13aWR0aD0iMyIgbWFya2VyLWVuZD0idXJsKCNhKSIvPjxnIGZvbnQtc2l6ZT0iMTYiIGZpbGw9IiMyNTNjNTUiIHRleHQtYW5jaG9yPSJtaWRkbGUiPjxjaXJjbGUgY3g9IjgwIiBjeT0iMjAwIiByPSI5IiBmaWxsPSIjNDI2MTdmIi8+PHRleHQgeD0iODAiIHk9IjE1MCIgZm9udC13ZWlnaHQ9IjYwMCI+QmFzZSBjcmVhZGE8L3RleHQ+PHRleHQgeD0iODAiIHk9IjE3MiI+bm90YXMgMSBhIDY8L3RleHQ+PGNpcmNsZSBjeD0iMzIwIiBjeT0iMjAwIiByPSI5IiBmaWxsPSIjNDI2MTdmIi8+PHRleHQgeD0iMzIwIiB5PSIxNzIiPm5vdGFzIDcgeSA4PC90ZXh0PjxjaXJjbGUgY3g9IjU4MCIgY3k9IjIwMCIgcj0iOSIgZmlsbD0iIzQyNjE3ZiIvPjx0ZXh0IHg9IjU4MCIgeT0iMTUwIj5ub3RhIDkgeTwvdGV4dD48dGV4dCB4PSI1ODAiIHk9IjE3MiI+Y29ycmVjY2nDs24gZGUgbGEgMjwvdGV4dD48Y2lyY2xlIGN4PSI4MzAiIGN5PSIyMDAiIHI9IjkiIGZpbGw9IiNiNTQ4MmEiLz48dGV4dCB4PSI4MzAiIHk9IjE3MiIgZmlsbD0iI2I1NDgyYSIgZm9udC13ZWlnaHQ9IjYwMCI+bm90YSAxMDwvdGV4dD48L2c+PGNpcmNsZSBjeD0iOTIwIiBjeT0iMjAwIiByPSIxNiIgZmlsbD0iI2I1NDgyYSIvPjxwYXRoIGQ9Ik0gOTEzIDE5MyBMIDkyNyAyMDcgTSA5MjcgMTkzIEwgOTEzIDIwNyIgc3Ryb2tlPSIjZmZmZmZmIiBzdHJva2Utd2lkdGg9IjMiLz48dGV4dCB4PSI5MjAiIHk9IjE1MCIgZm9udC1zaXplPSIxNiIgZmlsbD0iI2I1NDgyYSIgZm9udC13ZWlnaHQ9IjcwMCIgdGV4dC1hbmNob3I9Im1pZGRsZSI+RmFsbGE8L3RleHQ+PHRleHQgeD0iOTIwIiB5PSIxNzIiIGZvbnQtc2l6ZT0iMTQiIGZpbGw9IiNiNTQ4MmEiIHRleHQtYW5jaG9yPSJtaWRkbGUiPkRST1AgREFUQUJBU0U8L3RleHQ+PGcgdGV4dC1hbmNob3I9Im1pZGRsZSI+PHJlY3QgeD0iMTg4IiB5PSIxODgiIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgcng9IjQiIGZpbGw9IiMyNzVkYWQiLz48dGV4dCB4PSIyMDAiIHk9IjI0NCIgZm9udC1zaXplPSIxOCIgZmlsbD0iIzI3NWRhZCIgZm9udC13ZWlnaHQ9IjcwMCI+Q29tcGxldG88L3RleHQ+PHRleHQgeD0iMjAwIiB5PSIyNjYiIGZvbnQtc2l6ZT0iMTQiIGZpbGw9IiM1MjY3N2QiPk5vdGFzTGFiMDVfZnVsbC5iYWs8L3RleHQ+PHJlY3QgeD0iNDM4IiB5PSIxODgiIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgcng9IjQiIGZpbGw9IiMwODdjNjEiLz48dGV4dCB4PSI0NTAiIHk9IjI0NCIgZm9udC1zaXplPSIxOCIgZmlsbD0iIzA4N2M2MSIgZm9udC13ZWlnaHQ9IjcwMCI+RGlmZXJlbmNpYWw8L3RleHQ+PHRleHQgeD0iNDUwIiB5PSIyNjYiIGZvbnQtc2l6ZT0iMTQiIGZpbGw9IiM1MjY3N2QiPk5vdGFzTGFiMDVfZGlmZi5iYWs8L3RleHQ+PHJlY3QgeD0iNzA4IiB5PSIxODgiIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgcng9IjQiIGZpbGw9IiM5YTVhMDAiLz48dGV4dCB4PSI3MjAiIHk9IjI0NCIgZm9udC1zaXplPSIxOCIgZmlsbD0iIzlhNWEwMCIgZm9udC13ZWlnaHQ9IjcwMCI+TG9nPC90ZXh0Pjx0ZXh0IHg9IjcyMCIgeT0iMjY2IiBmb250LXNpemU9IjE0IiBmaWxsPSIjNTI2NzdkIj5Ob3Rhc0xhYjA1X2xvZy50cm48L3RleHQ+PC9nPjx0ZXh0IHg9IjgxNCIgeT0iMzAwIiBmb250LXNpemU9IjE1IiBmaWxsPSIjYjU0ODJhIiBmb250LXdlaWdodD0iNjAwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5TaW4gcmVzcGFsZG86IHNlIHBpZXJkZTwvdGV4dD48cmVjdCB4PSIzMiIgeT0iMzMwIiB3aWR0aD0iOTM2IiBoZWlnaHQ9IjcwIiByeD0iMTIiIGZpbGw9IiNlNWY1ZWYiIHN0cm9rZT0iIzA4N2M2MSIgc3Ryb2tlLXdpZHRoPSIxLjUiLz48dGV4dCB4PSI1MiIgeT0iMzYwIiBmb250LXNpemU9IjE4IiBmaWxsPSIjMTcyZTQ5IiBmb250LXdlaWdodD0iNjAwIj5EZXNwdcOpcyBkZSByZXN0YXVyYXIgcXVlZGFuIDkgY2FsaWZpY2FjaW9uZXM6IGxhIDIgY29ycmVnaWRhIHkgc2luIGxhIDEwLjwvdGV4dD48dGV4dCB4PSI1MiIgeT0iMzg2IiBmb250LXNpemU9IjE2IiBmaWxsPSIjMjUzYzU1Ij5MYSBjYWxpZmljYWNpw7NuIDEwIGVzIGxhIHDDqXJkaWRhIHF1ZSBtaWRlIGVsIFJQTy48L3RleHQ+PHRleHQgeD0iMzIiIHk9IjQzMiIgZm9udC1zaXplPSIxNSIgZmlsbD0iIzYwNzQ4YSIgZm9udC13ZWlnaHQ9IjQwMCI+Tm90YXNMYWIwNSDCtyBMYWJvcmF0b3JpbyA1IMK3IERpYWdyYW1hIGNvbmNlcHR1YWw8L3RleHQ+PC9nPjwvc3ZnPgo=" alt="Secuencia de cambios y respaldos de NotasLab05." loading="lazy"/><figcaption>Secuencia de cambios y respaldos de NotasLab05.</figcaption><button type="button" class="zoom-btn" onclick="openDiagram(this)">Ampliar diagrama</button></figure>
-<h3>1. Respaldo completo</h3>
-<div class="code-container"><div class="code-toolbar"><span>SQL</span><button type="button" class="copy-btn" onclick="copyCode(this)">Copiar código</button></div><pre><code class="language-sql">USE master;
-GO
+<h3>2. Respaldar</h3>
+<div class="code-container"><div class="code-toolbar"><span>SQL</span><button type="button" class="copy-btn" onclick="copyCode(this)">Copiar código</button></div><pre><code class="language-sql">-- Respaldo completo: calificaciones 1 a 6.
 BACKUP DATABASE NotasLab05
 TO DISK = &#39;/backup/NotasLab05/NotasLab05_full.bak&#39;
-WITH FORMAT, INIT,
-NAME = &#39;Respaldo completo NotasLab05&#39;,
-DESCRIPTION = &#39;Copia completa de seguridad de la base NotasLab05&#39;;
-GO
-</code></pre></div>
-<ul>
-<li><code>TO DISK</code> indica el archivo de destino dentro del contenedor.</li>
-<li><code>FORMAT</code> prepara un medio de respaldo nuevo e <code>INIT</code> sobrescribe los respaldos que el archivo pudiera contener.</li>
-<li><code>NAME</code> y <code>DESCRIPTION</code> identifican el respaldo en el historial.</li>
-</ul>
-<p>La pestaña <strong>Mensajes</strong> indica cuántas páginas se procesaron y termina con <code>BACKUP DATABASE successfully processed</code>.</p>
-<h3>2. Comprobar el archivo</h3>
-<div class="code-container"><div class="code-toolbar"><span>POWERSHELL</span><button type="button" class="copy-btn" onclick="copyCode(this)">Copiar código</button></div><pre><code class="language-powershell">docker exec sqlserver-2025 ls -l /backup/NotasLab05
-</code></pre></div>
-<p>La lista debe incluir <code>NotasLab05_full.bak</code>. El archivo contiene las páginas de datos y la parte del registro necesaria para recuperar la base hasta el momento del respaldo.</p>
-<h3>3. Registrar cambios después del completo</h3>
-<div class="code-container"><div class="code-toolbar"><span>SQL</span><button type="button" class="copy-btn" onclick="copyCode(this)">Copiar código</button></div><pre><code class="language-sql">USE NotasLab05;
-GO
-INSERT INTO dbo.Calificacion (calificacion_id, carnet, estudiante, materia, nota)
-VALUES (7, &#39;00070726&#39;, N&#39;Valeria Castillo&#39;, N&#39;Bases de Datos&#39;, 9.00),
-       (8, &#39;00080826&#39;, N&#39;Mario Flores&#39;, N&#39;Redes de Computadoras&#39;, 6.25);
-GO
-</code></pre></div>
-<p>Las calificaciones 7 y 8 <strong>no están en el respaldo completo</strong>.</p>
-<h3>4. Respaldo diferencial</h3>
-<div class="code-container"><div class="code-toolbar"><span>SQL</span><button type="button" class="copy-btn" onclick="copyCode(this)">Copiar código</button></div><pre><code class="language-sql">BACKUP DATABASE NotasLab05
+WITH FORMAT, INIT, NAME = &#39;Respaldo completo NotasLab05&#39;;
+
+INSERT INTO dbo.Calificacion (calificacion_id, estudiante, nota)
+VALUES (7, N&#39;Valeria Castillo&#39;, 9.00), (8, N&#39;Mario Flores&#39;, 6.25);
+
+-- Respaldo diferencial: cambios desde el completo.
+BACKUP DATABASE NotasLab05
 TO DISK = &#39;/backup/NotasLab05/NotasLab05_diff.bak&#39;
-WITH DIFFERENTIAL, INIT,
-NAME = &#39;Respaldo diferencial NotasLab05&#39;;
-GO
-</code></pre></div>
-<p>El diferencial copia <strong>solo las páginas modificadas desde el último completo</strong>, por eso procesa menos páginas. Incluye las calificaciones 7 y 8. <code>INIT</code> permite repetir el bloque sin acumular varios respaldos en el mismo archivo.</p>
-<h3>5. Registrar más cambios</h3>
-<div class="code-container"><div class="code-toolbar"><span>SQL</span><button type="button" class="copy-btn" onclick="copyCode(this)">Copiar código</button></div><pre><code class="language-sql">INSERT INTO dbo.Calificacion (calificacion_id, carnet, estudiante, materia, nota)
-VALUES (9, &#39;00090926&#39;, N&#39;Lucía Morales&#39;, N&#39;Programación&#39;, 8.75);
-UPDATE dbo.Calificacion
-SET nota = 7.25
-WHERE calificacion_id = 2;
-GO
-</code></pre></div>
-<p>Se agrega la calificación 9 y se corrige la nota de Luis Hernández, que pasa de 6.75 a 7.25.</p>
-<h3>6. Respaldo del log</h3>
-<div class="code-container"><div class="code-toolbar"><span>SQL</span><button type="button" class="copy-btn" onclick="copyCode(this)">Copiar código</button></div><pre><code class="language-sql">BACKUP LOG NotasLab05
+WITH DIFFERENTIAL, INIT, NAME = &#39;Respaldo diferencial NotasLab05&#39;;
+
+INSERT INTO dbo.Calificacion (calificacion_id, estudiante, nota)
+VALUES (9, N&#39;Lucía Morales&#39;, 8.75);
+UPDATE dbo.Calificacion SET nota = 7.25 WHERE calificacion_id = 2;
+
+-- Respaldo del log: transacciones registradas.
+BACKUP LOG NotasLab05
 TO DISK = &#39;/backup/NotasLab05/NotasLab05_log.trn&#39;
-WITH INIT,
-NAME = &#39;Respaldo del log NotasLab05&#39;;
-GO
-</code></pre></div>
-<p>Como es el primer respaldo de log, contiene las transacciones registradas desde el respaldo completo: las calificaciones 7 a 9 y la corrección de la nota 2. Un siguiente respaldo de log contendría solo lo ocurrido después de este.</p>
-<h3>7. Un cambio que no se respalda</h3>
-<div class="code-container"><div class="code-toolbar"><span>SQL</span><button type="button" class="copy-btn" onclick="copyCode(this)">Copiar código</button></div><pre><code class="language-sql">INSERT INTO dbo.Calificacion (calificacion_id, carnet, estudiante, materia, nota)
-VALUES (10, &#39;00101026&#39;, N&#39;Andrés Guzmán&#39;, N&#39;Bases de Datos&#39;, 7.50);
-GO
-SELECT COUNT(*) AS Calificaciones
-FROM dbo.Calificacion;
-GO
-</code></pre></div>
-<p>La tabla tiene <strong>10 calificaciones</strong>, pero la última se registró después del último respaldo. Este cambio permitirá observar el RPO en la restauración.</p>
-<h3>8. Revisar el historial y verificar un respaldo</h3>
-<p>SQL Server registra cada respaldo en la base del sistema <code>msdb</code>:</p>
-<div class="code-container"><div class="code-toolbar"><span>SQL</span><button type="button" class="copy-btn" onclick="copyCode(this)">Copiar código</button></div><pre><code class="language-sql">SELECT bs.name AS Respaldo,
-       bs.type AS Tipo,
-       bs.backup_finish_date AS Fin,
-       bmf.physical_device_name AS Archivo
-FROM msdb.dbo.backupset AS bs
-JOIN msdb.dbo.backupmediafamily AS bmf
-  ON bmf.media_set_id = bs.media_set_id
-WHERE bs.database_name = N&#39;NotasLab05&#39;
-ORDER BY bs.backup_set_id;
-GO
-</code></pre></div>
-<p>En la columna <strong>Tipo</strong>, <code>D</code> corresponde al respaldo completo, <code>I</code> al diferencial y <code>L</code> al de log. Las horas siguen el reloj del contenedor, que utiliza UTC.</p>
-<p>El historial indica que el respaldo se realizó, no que el archivo pueda restaurarse. <code>RESTORE VERIFYONLY</code> lee el archivo sin restaurarlo y comprueba que el respaldo esté completo y sea legible:</p>
-<div class="code-container"><div class="code-toolbar"><span>SQL</span><button type="button" class="copy-btn" onclick="copyCode(this)">Copiar código</button></div><pre><code class="language-sql">RESTORE VERIFYONLY
+WITH INIT, NAME = &#39;Respaldo del log NotasLab05&#39;;
+
+-- Cambio posterior al último respaldo.
+INSERT INTO dbo.Calificacion (calificacion_id, estudiante, nota)
+VALUES (10, N&#39;Andrés Guzmán&#39;, 7.50);
+
+-- Comprueba que el respaldo completo esté completo y sea legible.
+RESTORE VERIFYONLY
 FROM DISK = &#39;/backup/NotasLab05/NotasLab05_full.bak&#39;;
 GO
 </code></pre></div>
-<p>El mensaje esperado es <code>The backup set on file 1 is valid.</code></p>
-<aside class="learning-tip" role="note">
-<p><strong>Idea clave:</strong> verificar un archivo reduce el riesgo, pero la prueba definitiva de un respaldo es restaurarlo.</p>
-</aside>
-</google-codelab-step>
-<google-codelab-step label="Restauración" duration="15">
-<p>La restauración aplica <strong>los respaldos en el orden en que se crearon</strong>: primero el completo, después el diferencial y al final el log.</p>
-<figure><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAwIDQyMCIgcm9sZT0iaW1nIiBhcmlhLWxhYmVsbGVkYnk9InRpdGxlIGRlc2MiPjx0aXRsZSBpZD0idGl0bGUiPlJlc3RhdXJhciBlbiBvcmRlbjwvdGl0bGU+PGRlc2MgaWQ9ImRlc2MiPlNlIHJlc3RhdXJhIGVsIGNvbXBsZXRvIHkgZWwgZGlmZXJlbmNpYWwgY29uIE5PUkVDT1ZFUlksIHF1ZSBkZWphbiBsYSBiYXNlIGVuIFJFU1RPUklORywgeSBlbCBsb2cgY29uIFJFQ09WRVJZLCBxdWUgbGEgZGVqYSBPTkxJTkUgY29uIG51ZXZlIGNhbGlmaWNhY2lvbmVzLjwvZGVzYz48ZGVmcz48bWFya2VyIGlkPSJhIiB2aWV3Qm94PSIwIDAgMTAgMTAiIHJlZlg9IjkiIHJlZlk9IjUiIG1hcmtlcldpZHRoPSI4IiBtYXJrZXJIZWlnaHQ9IjgiIG9yaWVudD0iYXV0by1zdGFydC1yZXZlcnNlIj48cGF0aCBkPSJNIDAgMCBMIDEwIDUgTCAwIDEwIFoiIGZpbGw9IiM0MjYxN2YiLz48L21hcmtlcj48L2RlZnM+PHJlY3Qgd2lkdGg9IjEwMDAiIGhlaWdodD0iNDIwIiByeD0iMTYiIGZpbGw9IiNmOGZhZmMiLz48ZyBmb250LWZhbWlseT0iU2Vnb2UgVUksQXJpYWwsc2Fucy1zZXJpZiI+PHRleHQgeD0iMzIiIHk9IjQ0IiBmb250LXNpemU9IjI3IiBmaWxsPSIjMTcyZTQ5IiBmb250LXdlaWdodD0iNzAwIj5SZXN0YXVyYXIgZW4gb3JkZW48L3RleHQ+PHRleHQgeD0iMzIiIHk9Ijc1IiBmb250LXNpemU9IjE3IiBmaWxsPSIjNTI2NzdkIiBmb250LXdlaWdodD0iNDAwIj5OT1JFQ09WRVJZIGRlamEgbGEgYmFzZSBlc3BlcmFuZG8gZWwgc2lndWllbnRlIHJlc3BhbGRvOyBSRUNPVkVSWSBsYSBhYnJlLjwvdGV4dD48cmVjdCB4PSIzMiIgeT0iMTEyIiB3aWR0aD0iMjE2IiBoZWlnaHQ9IjE4MCIgcng9IjEyIiBmaWxsPSIjZWFmMWZjIiBzdHJva2U9IiMyNzVkYWQiIHN0cm9rZS13aWR0aD0iMS41Ii8+PHRleHQgeD0iNTAiIHk9IjE0NiIgZm9udC1zaXplPSIyMCIgZmlsbD0iIzI3NWRhZCIgZm9udC13ZWlnaHQ9IjY1MCI+MS4gQ29tcGxldG88L3RleHQ+PHRleHQgeD0iNTAiIHk9IjE3OCIgZm9udC1zaXplPSIxNSIgZmlsbD0iIzE3MmU0OSIgZm9udC1mYW1pbHk9IkNvbnNvbGFzLENhc2NhZGlhIE1vbm8sbW9ub3NwYWNlIj5XSVRIIE5PUkVDT1ZFUlk8L3RleHQ+PHRleHQgeD0iNTAiIHk9IjIxMiIgZm9udC1zaXplPSIxNiIgZmlsbD0iIzI1M2M1NSI+Tm90YXMgMSBhIDY8L3RleHQ+PHRleHQgeD0iNTAiIHk9IjI3MCIgZm9udC1zaXplPSIxNSIgZmlsbD0iIzUyNjc3ZCI+RXN0YWRvOiA8L3RleHQ+PHRleHQgeD0iMTA4IiB5PSIyNzAiIGZvbnQtc2l6ZT0iMTUiIGZpbGw9IiM5YTVhMDAiIGZvbnQtd2VpZ2h0PSI3MDAiPlJFU1RPUklORzwvdGV4dD48cmVjdCB4PSIyNzIiIHk9IjExMiIgd2lkdGg9IjIxNiIgaGVpZ2h0PSIxODAiIHJ4PSIxMiIgZmlsbD0iI2U1ZjVlZiIgc3Ryb2tlPSIjMDg3YzYxIiBzdHJva2Utd2lkdGg9IjEuNSIvPjx0ZXh0IHg9IjI5MCIgeT0iMTQ2IiBmb250LXNpemU9IjIwIiBmaWxsPSIjMDg3YzYxIiBmb250LXdlaWdodD0iNjUwIj4yLiBEaWZlcmVuY2lhbDwvdGV4dD48dGV4dCB4PSIyOTAiIHk9IjE3OCIgZm9udC1zaXplPSIxNSIgZmlsbD0iIzE3MmU0OSIgZm9udC1mYW1pbHk9IkNvbnNvbGFzLENhc2NhZGlhIE1vbm8sbW9ub3NwYWNlIj5XSVRIIE5PUkVDT1ZFUlk8L3RleHQ+PHRleHQgeD0iMjkwIiB5PSIyMTIiIGZvbnQtc2l6ZT0iMTYiIGZpbGw9IiMyNTNjNTUiPisgbm90YXMgNyB5IDg8L3RleHQ+PHRleHQgeD0iMjkwIiB5PSIyNzAiIGZvbnQtc2l6ZT0iMTUiIGZpbGw9IiM1MjY3N2QiPkVzdGFkbzogPC90ZXh0Pjx0ZXh0IHg9IjM0OCIgeT0iMjcwIiBmb250LXNpemU9IjE1IiBmaWxsPSIjOWE1YTAwIiBmb250LXdlaWdodD0iNzAwIj5SRVNUT1JJTkc8L3RleHQ+PHJlY3QgeD0iNTEyIiB5PSIxMTIiIHdpZHRoPSIyMTYiIGhlaWdodD0iMTgwIiByeD0iMTIiIGZpbGw9IiNmZGYzZTMiIHN0cm9rZT0iIzlhNWEwMCIgc3Ryb2tlLXdpZHRoPSIxLjUiLz48dGV4dCB4PSI1MzAiIHk9IjE0NiIgZm9udC1zaXplPSIyMCIgZmlsbD0iIzlhNWEwMCIgZm9udC13ZWlnaHQ9IjY1MCI+My4gTG9nPC90ZXh0Pjx0ZXh0IHg9IjUzMCIgeT0iMTc4IiBmb250LXNpemU9IjE1IiBmaWxsPSIjMTcyZTQ5IiBmb250LWZhbWlseT0iQ29uc29sYXMsQ2FzY2FkaWEgTW9ubyxtb25vc3BhY2UiPldJVEggUkVDT1ZFUlk8L3RleHQ+PHRleHQgeD0iNTMwIiB5PSIyMTIiIGZvbnQtc2l6ZT0iMTYiIGZpbGw9IiMyNTNjNTUiPisgbm90YSA5IHk8L3RleHQ+PHRleHQgeD0iNTMwIiB5PSIyMzYiIGZvbnQtc2l6ZT0iMTYiIGZpbGw9IiMyNTNjNTUiPmNvcnJlY2Npw7NuIGRlIGxhIDI8L3RleHQ+PHRleHQgeD0iNTMwIiB5PSIyNzAiIGZvbnQtc2l6ZT0iMTUiIGZpbGw9IiM1MjY3N2QiPkVzdGFkbzogPC90ZXh0Pjx0ZXh0IHg9IjU4OCIgeT0iMjcwIiBmb250LXNpemU9IjE1IiBmaWxsPSIjMDg3YzYxIiBmb250LXdlaWdodD0iNzAwIj5PTkxJTkU8L3RleHQ+PHJlY3QgeD0iNzUyIiB5PSIxMTIiIHdpZHRoPSIyMTYiIGhlaWdodD0iMTgwIiByeD0iMTIiIGZpbGw9IiNmZmZmZmYiIHN0cm9rZT0iIzA4N2M2MSIgc3Ryb2tlLXdpZHRoPSIyIi8+PHRleHQgeD0iNzcwIiB5PSIxNDYiIGZvbnQtc2l6ZT0iMjAiIGZpbGw9IiMwODdjNjEiIGZvbnQtd2VpZ2h0PSI2NTAiPkJhc2UgZGlzcG9uaWJsZTwvdGV4dD48dGV4dCB4PSI3NzAiIHk9IjE4NCIgZm9udC1zaXplPSIxNiIgZmlsbD0iIzI1M2M1NSI+OSBjYWxpZmljYWNpb25lczwvdGV4dD48dGV4dCB4PSI3NzAiIHk9IjIxMiIgZm9udC1zaXplPSIxNiIgZmlsbD0iIzI1M2M1NSI+bm90YSAyID0gNy4yNTwvdGV4dD48dGV4dCB4PSI3NzAiIHk9IjI0NiIgZm9udC1zaXplPSIxNiIgZmlsbD0iI2I1NDgyYSIgZm9udC13ZWlnaHQ9IjYwMCI+bm90YSAxMDogcGVyZGlkYTwvdGV4dD48cGF0aCBkPSJNIDI0OCAyMDIgTCAyNzIgMjAyIiBmaWxsPSJub25lIiBzdHJva2U9IiM0MjYxN2YiIHN0cm9rZS13aWR0aD0iMi41IiBtYXJrZXItZW5kPSJ1cmwoI2EpIi8+PHBhdGggZD0iTSA0ODggMjAyIEwgNTEyIDIwMiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjNDI2MTdmIiBzdHJva2Utd2lkdGg9IjIuNSIgbWFya2VyLWVuZD0idXJsKCNhKSIvPjxwYXRoIGQ9Ik0gNzI4IDIwMiBMIDc1MiAyMDIiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzQyNjE3ZiIgc3Ryb2tlLXdpZHRoPSIyLjUiIG1hcmtlci1lbmQ9InVybCgjYSkiLz48dGV4dCB4PSIzMiIgeT0iMzM2IiBmb250LXNpemU9IjE3IiBmaWxsPSIjMjUzYzU1Ij5TaSB1biBwYXNvIGludGVybWVkaW8gdXRpbGl6YSBSRUNPVkVSWSwgbGEgYmFzZSBzZSBhYnJlIHkgcmVjaGF6YSBsb3MgcmVzcGFsZG9zIHNpZ3VpZW50ZXMuPC90ZXh0Pjx0ZXh0IHg9IjMyIiB5PSIzNjQiIGZvbnQtc2l6ZT0iMTciIGZpbGw9IiMyNTNjNTUiPk1pZW50cmFzIGVzdMOhIGVuIFJFU1RPUklORywgbGEgYmFzZSBubyBhZG1pdGUgY29uc3VsdGFzLjwvdGV4dD48dGV4dCB4PSIzMiIgeT0iNDAyIiBmb250LXNpemU9IjE1IiBmaWxsPSIjNjA3NDhhIiBmb250LXdlaWdodD0iNDAwIj5Ob3Rhc0xhYjA1IMK3IExhYm9yYXRvcmlvIDUgwrcgRGlhZ3JhbWEgY29uY2VwdHVhbDwvdGV4dD48L2c+PC9zdmc+Cg==" alt="Orden de restauración de NotasLab05." loading="lazy"/><figcaption>Orden de restauración de NotasLab05.</figcaption><button type="button" class="zoom-btn" onclick="openDiagram(this)">Ampliar diagrama</button></figure>
-<h3>1. Simular la falla</h3>
+<ul>
+<li><code>FORMAT</code> e <code>INIT</code> preparan un archivo nuevo y sobrescriben su contenido. <code>NAME</code> identifica el respaldo en el historial.</li>
+<li>El diferencial contiene las calificaciones 7 y 8. El log contiene las transacciones desde el completo, entre ellas la calificación 9 y la corrección de la nota 2.</li>
+<li><strong>La calificación 10 queda sin respaldo.</strong></li>
+<li><code>RESTORE VERIFYONLY</code> debe responder <code>The backup set on file 1 is valid.</code></li>
+</ul>
+<h3>3. Simular la falla y restaurar</h3>
+<figure><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAwIDM4OCIgcm9sZT0iaW1nIiBhcmlhLWxhYmVsbGVkYnk9InRpdGxlIGRlc2MiPjx0aXRsZSBpZD0idGl0bGUiPlJlc3RhdXJhciBlbiBvcmRlbjwvdGl0bGU+PGRlc2MgaWQ9ImRlc2MiPlNlIHJlc3RhdXJhIGVsIGNvbXBsZXRvIHkgZWwgZGlmZXJlbmNpYWwgY29uIE5PUkVDT1ZFUlksIHF1ZSBkZWphbiBsYSBiYXNlIGVuIFJFU1RPUklORywgeSBlbCBsb2cgY29uIFJFQ09WRVJZLCBxdWUgbGEgZGVqYSBPTkxJTkUgY29uIG51ZXZlIGNhbGlmaWNhY2lvbmVzLjwvZGVzYz48ZGVmcz48bWFya2VyIGlkPSJhIiB2aWV3Qm94PSIwIDAgMTAgMTAiIHJlZlg9IjkiIHJlZlk9IjUiIG1hcmtlcldpZHRoPSI4IiBtYXJrZXJIZWlnaHQ9IjgiIG9yaWVudD0iYXV0by1zdGFydC1yZXZlcnNlIj48cGF0aCBkPSJNIDAgMCBMIDEwIDUgTCAwIDEwIFoiIGZpbGw9IiM0MjYxN2YiLz48L21hcmtlcj48L2RlZnM+PHJlY3Qgd2lkdGg9IjEwMDAiIGhlaWdodD0iMzg4IiByeD0iMTYiIGZpbGw9IiNmOGZhZmMiLz48ZyBmb250LWZhbWlseT0iU2Vnb2UgVUksQXJpYWwsc2Fucy1zZXJpZiI+PHRleHQgeD0iMzIiIHk9IjQ0IiBmb250LXNpemU9IjI3IiBmaWxsPSIjMTcyZTQ5IiBmb250LXdlaWdodD0iNzAwIj5SZXN0YXVyYXIgZW4gb3JkZW48L3RleHQ+PHRleHQgeD0iMzIiIHk9Ijc1IiBmb250LXNpemU9IjE3IiBmaWxsPSIjNTI2NzdkIiBmb250LXdlaWdodD0iNDAwIj5OT1JFQ09WRVJZIGRlamEgbGEgYmFzZSBlc3BlcmFuZG8gZWwgc2lndWllbnRlIHJlc3BhbGRvOyBSRUNPVkVSWSBsYSBhYnJlLjwvdGV4dD48cmVjdCB4PSIzMiIgeT0iMTEyIiB3aWR0aD0iMjE2IiBoZWlnaHQ9IjE4MCIgcng9IjEyIiBmaWxsPSIjZWFmMWZjIiBzdHJva2U9IiMyNzVkYWQiIHN0cm9rZS13aWR0aD0iMS41Ii8+PHRleHQgeD0iNTAiIHk9IjE0NiIgZm9udC1zaXplPSIyMCIgZmlsbD0iIzI3NWRhZCIgZm9udC13ZWlnaHQ9IjY1MCI+MS4gQ29tcGxldG88L3RleHQ+PHRleHQgeD0iNTAiIHk9IjE3OCIgZm9udC1zaXplPSIxNSIgZmlsbD0iIzE3MmU0OSIgZm9udC1mYW1pbHk9IkNvbnNvbGFzLENhc2NhZGlhIE1vbm8sbW9ub3NwYWNlIj5XSVRIIE5PUkVDT1ZFUlk8L3RleHQ+PHRleHQgeD0iNTAiIHk9IjIxMiIgZm9udC1zaXplPSIxNiIgZmlsbD0iIzI1M2M1NSI+Tm90YXMgMSBhIDY8L3RleHQ+PHRleHQgeD0iNTAiIHk9IjI3MCIgZm9udC1zaXplPSIxNSIgZmlsbD0iIzUyNjc3ZCI+RXN0YWRvOiA8L3RleHQ+PHRleHQgeD0iMTA4IiB5PSIyNzAiIGZvbnQtc2l6ZT0iMTUiIGZpbGw9IiM5YTVhMDAiIGZvbnQtd2VpZ2h0PSI3MDAiPlJFU1RPUklORzwvdGV4dD48cmVjdCB4PSIyNzIiIHk9IjExMiIgd2lkdGg9IjIxNiIgaGVpZ2h0PSIxODAiIHJ4PSIxMiIgZmlsbD0iI2U1ZjVlZiIgc3Ryb2tlPSIjMDg3YzYxIiBzdHJva2Utd2lkdGg9IjEuNSIvPjx0ZXh0IHg9IjI5MCIgeT0iMTQ2IiBmb250LXNpemU9IjIwIiBmaWxsPSIjMDg3YzYxIiBmb250LXdlaWdodD0iNjUwIj4yLiBEaWZlcmVuY2lhbDwvdGV4dD48dGV4dCB4PSIyOTAiIHk9IjE3OCIgZm9udC1zaXplPSIxNSIgZmlsbD0iIzE3MmU0OSIgZm9udC1mYW1pbHk9IkNvbnNvbGFzLENhc2NhZGlhIE1vbm8sbW9ub3NwYWNlIj5XSVRIIE5PUkVDT1ZFUlk8L3RleHQ+PHRleHQgeD0iMjkwIiB5PSIyMTIiIGZvbnQtc2l6ZT0iMTYiIGZpbGw9IiMyNTNjNTUiPisgbm90YXMgNyB5IDg8L3RleHQ+PHRleHQgeD0iMjkwIiB5PSIyNzAiIGZvbnQtc2l6ZT0iMTUiIGZpbGw9IiM1MjY3N2QiPkVzdGFkbzogPC90ZXh0Pjx0ZXh0IHg9IjM0OCIgeT0iMjcwIiBmb250LXNpemU9IjE1IiBmaWxsPSIjOWE1YTAwIiBmb250LXdlaWdodD0iNzAwIj5SRVNUT1JJTkc8L3RleHQ+PHJlY3QgeD0iNTEyIiB5PSIxMTIiIHdpZHRoPSIyMTYiIGhlaWdodD0iMTgwIiByeD0iMTIiIGZpbGw9IiNmZGYzZTMiIHN0cm9rZT0iIzlhNWEwMCIgc3Ryb2tlLXdpZHRoPSIxLjUiLz48dGV4dCB4PSI1MzAiIHk9IjE0NiIgZm9udC1zaXplPSIyMCIgZmlsbD0iIzlhNWEwMCIgZm9udC13ZWlnaHQ9IjY1MCI+My4gTG9nPC90ZXh0Pjx0ZXh0IHg9IjUzMCIgeT0iMTc4IiBmb250LXNpemU9IjE1IiBmaWxsPSIjMTcyZTQ5IiBmb250LWZhbWlseT0iQ29uc29sYXMsQ2FzY2FkaWEgTW9ubyxtb25vc3BhY2UiPldJVEggUkVDT1ZFUlk8L3RleHQ+PHRleHQgeD0iNTMwIiB5PSIyMTIiIGZvbnQtc2l6ZT0iMTYiIGZpbGw9IiMyNTNjNTUiPisgbm90YSA5IHk8L3RleHQ+PHRleHQgeD0iNTMwIiB5PSIyMzYiIGZvbnQtc2l6ZT0iMTYiIGZpbGw9IiMyNTNjNTUiPmNvcnJlY2Npw7NuIGRlIGxhIDI8L3RleHQ+PHRleHQgeD0iNTMwIiB5PSIyNzAiIGZvbnQtc2l6ZT0iMTUiIGZpbGw9IiM1MjY3N2QiPkVzdGFkbzogPC90ZXh0Pjx0ZXh0IHg9IjU4OCIgeT0iMjcwIiBmb250LXNpemU9IjE1IiBmaWxsPSIjMDg3YzYxIiBmb250LXdlaWdodD0iNzAwIj5PTkxJTkU8L3RleHQ+PHJlY3QgeD0iNzUyIiB5PSIxMTIiIHdpZHRoPSIyMTYiIGhlaWdodD0iMTgwIiByeD0iMTIiIGZpbGw9IiNmZmZmZmYiIHN0cm9rZT0iIzA4N2M2MSIgc3Ryb2tlLXdpZHRoPSIyIi8+PHRleHQgeD0iNzcwIiB5PSIxNDYiIGZvbnQtc2l6ZT0iMjAiIGZpbGw9IiMwODdjNjEiIGZvbnQtd2VpZ2h0PSI2NTAiPkJhc2UgZGlzcG9uaWJsZTwvdGV4dD48dGV4dCB4PSI3NzAiIHk9IjE4NCIgZm9udC1zaXplPSIxNiIgZmlsbD0iIzI1M2M1NSI+OSBjYWxpZmljYWNpb25lczwvdGV4dD48dGV4dCB4PSI3NzAiIHk9IjIxMiIgZm9udC1zaXplPSIxNiIgZmlsbD0iIzI1M2M1NSI+bm90YSAyID0gNy4yNTwvdGV4dD48dGV4dCB4PSI3NzAiIHk9IjI0NiIgZm9udC1zaXplPSIxNiIgZmlsbD0iI2I1NDgyYSIgZm9udC13ZWlnaHQ9IjYwMCI+bm90YSAxMDogcGVyZGlkYTwvdGV4dD48cGF0aCBkPSJNIDI0OCAyMDIgTCAyNzIgMjAyIiBmaWxsPSJub25lIiBzdHJva2U9IiM0MjYxN2YiIHN0cm9rZS13aWR0aD0iMi41IiBtYXJrZXItZW5kPSJ1cmwoI2EpIi8+PHBhdGggZD0iTSA0ODggMjAyIEwgNTEyIDIwMiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjNDI2MTdmIiBzdHJva2Utd2lkdGg9IjIuNSIgbWFya2VyLWVuZD0idXJsKCNhKSIvPjxwYXRoIGQ9Ik0gNzI4IDIwMiBMIDc1MiAyMDIiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzQyNjE3ZiIgc3Ryb2tlLXdpZHRoPSIyLjUiIG1hcmtlci1lbmQ9InVybCgjYSkiLz48dGV4dCB4PSIzMiIgeT0iMzM2IiBmb250LXNpemU9IjE3IiBmaWxsPSIjMjUzYzU1Ij5TaSB1biBwYXNvIGludGVybWVkaW8gdXRpbGl6YSBSRUNPVkVSWSwgbGEgYmFzZSBzZSBhYnJlIHkgcmVjaGF6YSBsb3MgcmVzcGFsZG9zIHNpZ3VpZW50ZXMuPC90ZXh0Pjx0ZXh0IHg9IjMyIiB5PSIzNjQiIGZvbnQtc2l6ZT0iMTciIGZpbGw9IiMyNTNjNTUiPk1pZW50cmFzIGVzdMOhIGVuIFJFU1RPUklORywgbGEgYmFzZSBubyBhZG1pdGUgY29uc3VsdGFzLjwvdGV4dD48L2c+PC9zdmc+DQo=" alt="Orden de restauración de NotasLab05." loading="lazy"/><button type="button" class="zoom-btn" onclick="openDiagram(this)">Ampliar diagrama</button></figure>
 <div class="code-container"><div class="code-toolbar"><span>SQL</span><button type="button" class="copy-btn" onclick="copyCode(this)">Copiar código</button></div><pre><code class="language-sql">USE master;
 GO
 DROP DATABASE NotasLab05;
 GO
-</code></pre></div>
-<p><code>DROP DATABASE</code> elimina la base junto con sus archivos de datos y de registro. Representa la pérdida completa de la base, como el borrado accidental de los casos revisados.</p>
-<aside class="learning-tip" role="note">
-<p><strong>Consejo:</strong> si SSMS indica que la base está en uso, hay que cerrar las otras pestañas de consulta conectadas a <code>NotasLab05</code> y ejecutar de nuevo el bloque.</p>
-</aside>
-<h3>2. Restaurar el respaldo completo</h3>
-<div class="code-container"><div class="code-toolbar"><span>SQL</span><button type="button" class="copy-btn" onclick="copyCode(this)">Copiar código</button></div><pre><code class="language-sql">RESTORE DATABASE NotasLab05
-FROM DISK = &#39;/backup/NotasLab05/NotasLab05_full.bak&#39;
-WITH NORECOVERY;
+RESTORE DATABASE NotasLab05
+FROM DISK = &#39;/backup/NotasLab05/NotasLab05_full.bak&#39; WITH NORECOVERY;
+RESTORE DATABASE NotasLab05
+FROM DISK = &#39;/backup/NotasLab05/NotasLab05_diff.bak&#39; WITH NORECOVERY;
+RESTORE LOG NotasLab05
+FROM DISK = &#39;/backup/NotasLab05/NotasLab05_log.trn&#39; WITH RECOVERY;
 GO
-SELECT name, state_desc
-FROM sys.databases
-WHERE name = N&#39;NotasLab05&#39;;
-GO
-</code></pre></div>
-<p><code>NORECOVERY</code> deja la base en estado <strong><code>RESTORING</code></strong>: todavía no puede consultarse, porque espera los siguientes respaldos. En el Explorador de objetos aparece como <em>Restaurando...</em>.</p>
-<h3>3. Restaurar el diferencial</h3>
-<div class="code-container"><div class="code-toolbar"><span>SQL</span><button type="button" class="copy-btn" onclick="copyCode(this)">Copiar código</button></div><pre><code class="language-sql">RESTORE DATABASE NotasLab05
-FROM DISK = &#39;/backup/NotasLab05/NotasLab05_diff.bak&#39;
-WITH NORECOVERY;
-GO
-</code></pre></div>
-<p>El diferencial incorpora las calificaciones 7 y 8. La base continúa en <code>RESTORING</code>.</p>
-<h3>4. Restaurar el log y abrir la base</h3>
-<div class="code-container"><div class="code-toolbar"><span>SQL</span><button type="button" class="copy-btn" onclick="copyCode(this)">Copiar código</button></div><pre><code class="language-sql">RESTORE LOG NotasLab05
-FROM DISK = &#39;/backup/NotasLab05/NotasLab05_log.trn&#39;
-WITH RECOVERY;
-GO
-SELECT name, state_desc
-FROM sys.databases
-WHERE name = N&#39;NotasLab05&#39;;
-GO
-</code></pre></div>
-<p><code>RECOVERY</code> aplica las transacciones del log y <strong>abre la base</strong>: el estado pasa a <code>ONLINE</code>. Después de <code>RECOVERY</code> ya no se pueden aplicar más respaldos de esa secuencia.</p>
-<aside class="learning-tip" role="note">
-<p><strong>Consejo:</strong> si se utiliza <code>RECOVERY</code> antes del último paso, la base se abre y los respaldos siguientes se rechazan con el error <code>3117</code>. Para corregirlo se repite la restauración desde el completo con <code>WITH NORECOVERY, REPLACE</code>. Sin <code>REPLACE</code>, SQL Server responde con el error <code>3159</code>, porque la base abierta tiene un registro que no se ha respaldado.</p>
-</aside>
-<h3>5. Comprobar los datos recuperados</h3>
-<div class="code-container"><div class="code-toolbar"><span>SQL</span><button type="button" class="copy-btn" onclick="copyCode(this)">Copiar código</button></div><pre><code class="language-sql">USE NotasLab05;
-GO
-SELECT calificacion_id, estudiante, materia, nota
-FROM dbo.Calificacion
+SELECT calificacion_id, estudiante, nota
+FROM NotasLab05.dbo.Calificacion
 ORDER BY calificacion_id;
 GO
 </code></pre></div>
-<p>El resultado muestra <strong>nueve calificaciones</strong>:</p>
-<ul>
-<li>Las calificaciones 1 a 6 provienen del respaldo completo.</li>
-<li>Las calificaciones 7 y 8, del diferencial.</li>
-<li>La calificación 9 y la nota corregida de Luis Hernández, 7.25, del log.</li>
-<li><strong>La calificación 10 no aparece</strong>, porque se registró después del último respaldo.</li>
-</ul>
+<p><code>DROP DATABASE</code> elimina la base y sus archivos. <code>NORECOVERY</code> deja la base en estado <code>RESTORING</code>, a la espera del siguiente respaldo, y <code>RECOVERY</code> aplica el último y la abre. El resultado muestra <strong>nueve calificaciones</strong>, con la nota 2 corregida a 7.25; <strong>la calificación 10 se perdió</strong> porque se registró después del último respaldo.</p>
 <aside class="learning-tip" role="note">
-<p><strong>Idea clave:</strong> la calificación 10 representa el <strong>RPO</strong>: lo registrado después del último respaldo se pierde, y respaldar el log con más frecuencia reduce esa pérdida. Los tres pasos de restauración se relacionan con el <strong>RTO</strong>: cuantos más archivos tiene la secuencia, más larga es la recuperación.</p>
+<p><strong>Idea clave:</strong> la calificación 10 es el <strong>RPO</strong> en la práctica: lo registrado después del último respaldo se pierde. Los tres pasos de restauración se relacionan con el <strong>RTO</strong>: cuantos más archivos, más larga es la recuperación.</p>
+</aside>
+<aside class="learning-tip" role="note">
+<p><strong>Consejo:</strong> si SSMS indica que la base está en uso, cierra las otras pestañas de consulta conectadas a <code>NotasLab05</code> y ejecuta de nuevo el bloque.</p>
 </aside>
 </google-codelab-step>
-<google-codelab-step label="Respaldos lógicos" duration="14">
-<p>Los respaldos lógicos exportan <strong>objetos o datos en archivos legibles</strong>. Sirven para trasladar una tabla, documentar una estructura o conservar una copia parcial; no reemplazan la secuencia de respaldos físicos.</p>
-<h3>1. Generar scripts desde SSMS</h3>
-<p>El asistente <strong>Generar scripts</strong> crea un archivo <code>.sql</code> con las instrucciones <code>CREATE</code> e <code>INSERT</code> necesarias para recrear los objetos o solo sus datos.</p>
+<google-codelab-step label="Respaldos lógicos" duration="8">
+<h3>Generar scripts desde SSMS</h3>
+<p>El asistente crea un archivo <code>.sql</code> con las instrucciones <code>CREATE</code> e <code>INSERT</code> para recrear la tabla y sus datos:</p>
 <ol>
-<li>En el <strong>Explorador de objetos</strong>, haz clic derecho en <code>NotasLab05</code> y elige <strong>Tareas → Generar scripts...</strong>.</li>
-<li>En <strong>Elegir objetos</strong>, marca <strong>Seleccionar objetos de base de datos específicos</strong> y selecciona la tabla <code>dbo.Calificacion</code>.</li>
+<li>Clic derecho en <code>NotasLab05</code> → <strong>Tareas → Generar scripts...</strong>.</li>
+<li>En <strong>Elegir objetos</strong>, marca <strong>Seleccionar objetos de base de datos específicos</strong> y elige <code>dbo.Calificacion</code>.</li>
 <li>En <strong>Establecer opciones de scripting</strong>, pulsa <strong>Avanzadas</strong> y cambia <strong>Tipos de datos que se deben incluir en el script</strong> a <strong>Esquema y datos</strong>.</li>
-<li>Elige <strong>Guardar como archivo de script</strong>, indica una carpeta del equipo en <strong>Nombre de archivo</strong> y termina el asistente.</li>
+<li>Elige <strong>Guardar como archivo de script</strong>, indica el <strong>Nombre de archivo</strong> y termina el asistente.</li>
 </ol>
-<p>El archivo se guarda en Windows, fuera del contenedor. Contiene el <code>CREATE TABLE</code> de <code>Calificacion</code> y las instrucciones <code>INSERT</code> de sus nueve filas.</p>
-<h3>2. Exportar una consulta con sqlcmd</h3>
-<p><code>sqlcmd</code> ejecuta una consulta y guarda el resultado en un archivo. En el contenedor se conecta con el login <code>sa</code>, porque la autenticación de Windows de los ejemplos de clase (<code>-E</code>) no está disponible en Linux.</p>
-<div class="code-container"><div class="code-toolbar"><span>POWERSHELL</span><button type="button" class="copy-btn" onclick="copyCode(this)">Copiar código</button></div><pre><code class="language-powershell">docker exec sqlserver-2025 /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P &quot;Admin123!&quot; -C -d NotasLab05 -Q &quot;SET NOCOUNT ON; SELECT calificacion_id, carnet, estudiante, materia, nota FROM dbo.Calificacion ORDER BY calificacion_id;&quot; -o /backup/NotasLab05/calificaciones.csv -s&quot;,&quot; -W
-docker exec sqlserver-2025 cat /backup/NotasLab05/calificaciones.csv
-</code></pre></div>
-<div class="table-scroll"><table>
-<thead>
-<tr>
-<th>Opción</th>
-<th>Función</th>
-</tr>
-</thead>
-<tbody><tr>
-<td><code>-S localhost -U sa -P</code></td>
-<td>Servidor, login y contraseña. Dentro del contenedor, el servidor es <code>localhost</code>.</td>
-</tr>
-<tr>
-<td><code>-C</code></td>
-<td>Confía en el certificado del servidor.</td>
-</tr>
-<tr>
-<td><code>-d</code></td>
-<td>Base de datos de la consulta.</td>
-</tr>
-<tr>
-<td><code>-Q</code></td>
-<td>Consulta que se ejecuta.</td>
-</tr>
-<tr>
-<td><code>-o</code></td>
-<td>Archivo de salida.</td>
-</tr>
-<tr>
-<td><code>-s&quot;,&quot;</code></td>
-<td>Separa las columnas con comas.</td>
-</tr>
-<tr>
-<td><code>-W</code></td>
-<td>Elimina los espacios de relleno de cada columna.</td>
-</tr>
-</tbody></table></div>
-<p>La primera línea contiene los nombres de las columnas y la segunda, guiones de separación; después aparecen las nueve calificaciones.</p>
-<aside class="learning-tip" role="note">
-<p><strong>Consejo:</strong> el archivo se guarda en UTF-8. Si PowerShell muestra mal los acentos, <code>chcp 65001</code> cambia la consola a UTF-8 antes de repetir el <code>cat</code>.</p>
-</aside>
-<h3>3. Exportar e importar una tabla con bcp</h3>
-<p><code>bcp</code> (<em>Bulk Copy Program</em>) exporta e importa grandes volúmenes de datos entre una tabla y un archivo: <code>out</code> exporta e <code>in</code> importa. <code>-n</code> utiliza el formato nativo de SQL Server y <code>-u</code> confía en el certificado del servidor.</p>
+<h3>Exportar e importar con bcp</h3>
+<p><code>bcp</code> copia los datos de una tabla a un archivo (<code>out</code>) y de vuelta (<code>in</code>). El ejemplo exporta las calificaciones, simula un <code>DELETE</code> sin <code>WHERE</code> y las recupera. Desde PowerShell:</p>
 <div class="code-container"><div class="code-toolbar"><span>POWERSHELL</span><button type="button" class="copy-btn" onclick="copyCode(this)">Copiar código</button></div><pre><code class="language-powershell">docker exec sqlserver-2025 /opt/mssql-tools18/bin/bcp NotasLab05.dbo.Calificacion out /backup/NotasLab05/calificacion.dat -n -S localhost -U sa -P &quot;Admin123!&quot; -u
 </code></pre></div>
-<p>El mensaje final indica <code>9 rows copied</code>. A continuación se simula un error humano: un <code>DELETE</code> sin <code>WHERE</code> elimina todas las calificaciones.</p>
-<div class="code-container"><div class="code-toolbar"><span>SQL</span><button type="button" class="copy-btn" onclick="copyCode(this)">Copiar código</button></div><pre><code class="language-sql">USE NotasLab05;
-GO
-DELETE FROM dbo.Calificacion;
-GO
-SELECT COUNT(*) AS Calificaciones
-FROM dbo.Calificacion;
+<p>En SSMS:</p>
+<div class="code-container"><div class="code-toolbar"><span>SQL</span><button type="button" class="copy-btn" onclick="copyCode(this)">Copiar código</button></div><pre><code class="language-sql">DELETE FROM NotasLab05.dbo.Calificacion;
 GO
 </code></pre></div>
-<p>El conteo es <strong>0</strong>. La importación devuelve las filas desde el archivo:</p>
+<p>De nuevo en PowerShell:</p>
 <div class="code-container"><div class="code-toolbar"><span>POWERSHELL</span><button type="button" class="copy-btn" onclick="copyCode(this)">Copiar código</button></div><pre><code class="language-powershell">docker exec sqlserver-2025 /opt/mssql-tools18/bin/bcp NotasLab05.dbo.Calificacion in /backup/NotasLab05/calificacion.dat -n -S localhost -U sa -P &quot;Admin123!&quot; -u
 </code></pre></div>
-<div class="code-container"><div class="code-toolbar"><span>SQL</span><button type="button" class="copy-btn" onclick="copyCode(this)">Copiar código</button></div><pre><code class="language-sql">SELECT COUNT(*) AS Calificaciones
-FROM dbo.Calificacion;
-GO
-</code></pre></div>
-<p>El conteo vuelve a ser <strong>9</strong>.</p>
+<p>Ambos comandos terminan con <code>9 rows copied</code>. <code>-n</code> utiliza el formato nativo y <code>-u</code> confía en el certificado del servidor. En el contenedor se usa <code>-U sa -P</code> porque la autenticación de Windows (<code>-T</code>) no está disponible. <code>sqlcmd</code> exporta de forma similar el resultado de una consulta con <code>-Q</code> y <code>-o</code>.</p>
 <aside class="learning-tip" role="note">
-<p><strong>Consejo:</strong> <code>bcp in</code> agrega filas y no reemplaza las existentes. Si la tabla todavía contiene las mismas claves, la carga se detiene por la clave primaria con el error <code>2627</code> y no se copia ninguna fila. Por eso el ejemplo importa sobre la tabla vacía.</p>
+<p><strong>Consejo:</strong> <code>bcp in</code> agrega filas. Si la tabla todavía contiene las mismas claves, falla con el error <code>2627</code> y no copia ninguna fila.</p>
 </aside>
 </google-codelab-step>
-<google-codelab-step label="Delegar y programar respaldos" duration="15">
-<h3>1. Delegar con db_backupoperator</h3>
-<p>El rol fijo de base de datos <strong><code>db_backupoperator</code></strong> permite <strong>delegar los respaldos sin dar control total sobre la base</strong>, por ejemplo al personal de operaciones.</p>
-<div class="code-container"><div class="code-toolbar"><span>SQL</span><button type="button" class="copy-btn" onclick="copyCode(this)">Copiar código</button></div><pre><code class="language-sql">USE master;
-GO
-CREATE LOGIN loginRespaldo WITH PASSWORD = &#39;Respaldo2026!&#39;;
-GO
-USE NotasLab05;
-GO
-CREATE USER usuarioRespaldo FOR LOGIN loginRespaldo;
-ALTER ROLE db_backupoperator ADD MEMBER usuarioRespaldo;
-GO
-</code></pre></div>
-<p>El siguiente bloque utiliza la identidad del usuario para crear un respaldo completo y después intentar leer las calificaciones. El plan de ejecución real debe estar desactivado con <code>Ctrl + M</code>.</p>
-<div class="code-container"><div class="code-toolbar"><span>SQL</span><button type="button" class="copy-btn" onclick="copyCode(this)">Copiar código</button></div><pre><code class="language-sql">EXECUTE AS USER = &#39;usuarioRespaldo&#39;;
-GO
-BACKUP DATABASE NotasLab05
-TO DISK = &#39;/backup/NotasLab05/NotasLab05_operador.bak&#39;
-WITH INIT,
-NAME = &#39;Respaldo del operador NotasLab05&#39;;
-GO
-SELECT calificacion_id, nota
-FROM dbo.Calificacion;
-GO
-REVERT;
-GO
-</code></pre></div>
-<p>El respaldo termina correctamente y la consulta falla con el error <code>229</code>: <strong>el rol permite respaldar, pero no leer los datos</strong>. Restaurar requiere otros permisos, como pertenecer a los roles de servidor <code>sysadmin</code> o <code>dbcreator</code>.</p>
-<h3>2. Programar un respaldo con SQL Agent</h3>
-<p><strong>SQL Server Agent</strong> es un servicio del motor que automatiza tareas administrativas y las ejecuta en segundo plano. Sus componentes principales son:</p>
-<div class="table-scroll"><table>
-<thead>
-<tr>
-<th>Componente</th>
-<th>Función</th>
-<th>En el ejemplo</th>
-</tr>
-</thead>
-<tbody><tr>
-<td><strong>Job</strong></td>
-<td>Tarea automatizada formada por un conjunto de pasos.</td>
-<td><code>Respaldo diario NotasLab05</code></td>
-</tr>
-<tr>
-<td><strong>Step</strong></td>
-<td>Acción del job: un script T-SQL, un comando del sistema o un proceso de SSIS.</td>
-<td><code>BACKUP DATABASE ... WITH INIT, COMPRESSION</code></td>
-</tr>
-<tr>
-<td><strong>Schedule</strong></td>
-<td>Frecuencia de ejecución.</td>
-<td>Diario a las 10:00 p. m.</td>
-</tr>
-<tr>
-<td><strong>Alert</strong> y <strong>Operator</strong></td>
-<td>La alerta detecta eventos o errores y el operador recibe las notificaciones.</td>
-<td>No se configuran en esta guía.</td>
-</tr>
-</tbody></table></div>
-<figure><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAwIDQwMCIgcm9sZT0iaW1nIiBhcmlhLWxhYmVsbGVkYnk9InRpdGxlIGRlc2MiPjx0aXRsZSBpZD0idGl0bGUiPlVuIGpvYiBkZSByZXNwYWxkbyBlbiBTUUwgQWdlbnQ8L3RpdGxlPjxkZXNjIGlkPSJkZXNjIj5FbCBqb2IgY29udGllbmUgdW4gcGFzbyBjb24gZWwgQkFDS1VQIERBVEFCQVNFIHkgdW5hIHByb2dyYW1hY2nDs24gZGlhcmlhIGEgbGFzIDIyOjAwIGRlbCBzZXJ2aWRvci4gQ2FkYSBlamVjdWNpw7NuIHF1ZWRhIGVuIGVsIGhpc3RvcmlhbCBkZSBtc2RiLjwvZGVzYz48ZGVmcz48bWFya2VyIGlkPSJhIiB2aWV3Qm94PSIwIDAgMTAgMTAiIHJlZlg9IjkiIHJlZlk9IjUiIG1hcmtlcldpZHRoPSI4IiBtYXJrZXJIZWlnaHQ9IjgiIG9yaWVudD0iYXV0by1zdGFydC1yZXZlcnNlIj48cGF0aCBkPSJNIDAgMCBMIDEwIDUgTCAwIDEwIFoiIGZpbGw9IiM0MjYxN2YiLz48L21hcmtlcj48L2RlZnM+PHJlY3Qgd2lkdGg9IjEwMDAiIGhlaWdodD0iNDAwIiByeD0iMTYiIGZpbGw9IiNmOGZhZmMiLz48ZyBmb250LWZhbWlseT0iU2Vnb2UgVUksQXJpYWwsc2Fucy1zZXJpZiI+PHRleHQgeD0iMzIiIHk9IjQ0IiBmb250LXNpemU9IjI3IiBmaWxsPSIjMTcyZTQ5IiBmb250LXdlaWdodD0iNzAwIj5VbiBqb2IgZGUgcmVzcGFsZG8gZW4gU1FMIEFnZW50PC90ZXh0Pjx0ZXh0IHg9IjMyIiB5PSI3NSIgZm9udC1zaXplPSIxNyIgZmlsbD0iIzUyNjc3ZCIgZm9udC13ZWlnaHQ9IjQwMCI+RWwgc2VydmljaW8gZWplY3V0YSBlbCBwYXNvIGRlbCBqb2IgY3VhbmRvIGxsZWdhIHN1IHByb2dyYW1hY2nDs24gbyBjdWFuZG8gc2UgaW5pY2lhIGEgbWFuby48L3RleHQ+PHJlY3QgeD0iMzIiIHk9IjExMCIgd2lkdGg9IjI5MCIgaGVpZ2h0PSIxNDAiIHJ4PSIxMiIgZmlsbD0iI2VhZjFmYyIgc3Ryb2tlPSIjMjc1ZGFkIiBzdHJva2Utd2lkdGg9IjEuNSIvPjx0ZXh0IHg9IjUyIiB5PSIxNDQiIGZvbnQtc2l6ZT0iMjAiIGZpbGw9IiMyNzVkYWQiIGZvbnQtd2VpZ2h0PSI2NTAiPkpvYjwvdGV4dD48dGV4dCB4PSI1MiIgeT0iMTc4IiBmb250LXNpemU9IjE3IiBmaWxsPSIjMjUzYzU1Ij5SZXNwYWxkbyBkaWFyaW8gTm90YXNMYWIwNTwvdGV4dD48dGV4dCB4PSI1MiIgeT0iMjA2IiBmb250LXNpemU9IjE1IiBmaWxsPSIjNTI2NzdkIj5zcF9hZGRfam9iIMK3IHNwX2FkZF9qb2JzZXJ2ZXI8L3RleHQ+PHJlY3QgeD0iMzU1IiB5PSIxMTAiIHdpZHRoPSIyOTAiIGhlaWdodD0iMTQwIiByeD0iMTIiIGZpbGw9IiNlNWY1ZWYiIHN0cm9rZT0iIzA4N2M2MSIgc3Ryb2tlLXdpZHRoPSIxLjUiLz48dGV4dCB4PSIzNzUiIHk9IjE0NCIgZm9udC1zaXplPSIyMCIgZmlsbD0iIzA4N2M2MSIgZm9udC13ZWlnaHQ9IjY1MCI+U3RlcDwvdGV4dD48dGV4dCB4PSIzNzUiIHk9IjE3OCIgZm9udC1zaXplPSIxNSIgZmlsbD0iIzE3MmU0OSIgZm9udC1mYW1pbHk9IkNvbnNvbGFzLENhc2NhZGlhIE1vbm8sbW9ub3NwYWNlIj5CQUNLVVAgREFUQUJBU0UgTm90YXNMYWIwNTwvdGV4dD48dGV4dCB4PSIzNzUiIHk9IjIwMiIgZm9udC1zaXplPSIxNSIgZmlsbD0iIzE3MmU0OSIgZm9udC1mYW1pbHk9IkNvbnNvbGFzLENhc2NhZGlhIE1vbm8sbW9ub3NwYWNlIj5XSVRIIElOSVQsIENPTVBSRVNTSU9OPC90ZXh0Pjx0ZXh0IHg9IjM3NSIgeT0iMjMwIiBmb250LXNpemU9IjE1IiBmaWxsPSIjNTI2NzdkIj5zcF9hZGRfam9ic3RlcDwvdGV4dD48cmVjdCB4PSI2NzgiIHk9IjExMCIgd2lkdGg9IjI5MCIgaGVpZ2h0PSIxNDAiIHJ4PSIxMiIgZmlsbD0iI2ZkZjNlMyIgc3Ryb2tlPSIjOWE1YTAwIiBzdHJva2Utd2lkdGg9IjEuNSIvPjx0ZXh0IHg9IjY5OCIgeT0iMTQ0IiBmb250LXNpemU9IjIwIiBmaWxsPSIjOWE1YTAwIiBmb250LXdlaWdodD0iNjUwIj5TY2hlZHVsZTwvdGV4dD48dGV4dCB4PSI2OTgiIHk9IjE3OCIgZm9udC1zaXplPSIxNyIgZmlsbD0iIzI1M2M1NSI+RGlhcmlvIGEgbGFzIDIyOjAwPC90ZXh0Pjx0ZXh0IHg9IjY5OCIgeT0iMjAyIiBmb250LXNpemU9IjE1IiBmaWxsPSIjMjUzYzU1Ij5ob3JhIGRlbCBzZXJ2aWRvciAoVVRDKTwvdGV4dD48dGV4dCB4PSI2OTgiIHk9IjIzMCIgZm9udC1zaXplPSIxNSIgZmlsbD0iIzUyNjc3ZCI+c3BfYWRkX3NjaGVkdWxlPC90ZXh0PjxwYXRoIGQ9Ik0gMzIyIDE4MCBMIDM1NSAxODAiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzQyNjE3ZiIgc3Ryb2tlLXdpZHRoPSIyLjUiIG1hcmtlci1lbmQ9InVybCgjYSkiLz48cGF0aCBkPSJNIDY3OCAxODAgTCA2NDUgMTgwIiBmaWxsPSJub25lIiBzdHJva2U9IiM0MjYxN2YiIHN0cm9rZS13aWR0aD0iMi41IiBtYXJrZXItZW5kPSJ1cmwoI2EpIi8+PHBhdGggZD0iTSA1MDAgMjUwIEwgNTAwIDI4MiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjNDI2MTdmIiBzdHJva2Utd2lkdGg9IjIuNSIgbWFya2VyLWVuZD0idXJsKCNhKSIvPjxyZWN0IHg9IjMyIiB5PSIyODQiIHdpZHRoPSI5MzYiIGhlaWdodD0iNTgiIHJ4PSIxMiIgZmlsbD0iI2ZmZmZmZiIgc3Ryb2tlPSIjYjljYmUwIiBzdHJva2Utd2lkdGg9IjEuNSIvPjx0ZXh0IHg9IjUyIiB5PSIzMTkiIGZvbnQtc2l6ZT0iMTciIGZpbGw9IiMyNTNjNTUiPjx0c3BhbiBmb250LXdlaWdodD0iNjAwIj5IaXN0b3JpYWw6PC90c3Bhbj4gbXNkYi5kYm8uc3lzam9iaGlzdG9yeSByZWdpc3RyYSBzaSBjYWRhIGVqZWN1Y2nDs24gdGVybWluw7MgY29uIMOpeGl0byBvIGNvbiBlcnJvci48L3RleHQ+PHRleHQgeD0iMzIiIHk9IjM4MiIgZm9udC1zaXplPSIxNSIgZmlsbD0iIzYwNzQ4YSIgZm9udC13ZWlnaHQ9IjQwMCI+Tm90YXNMYWIwNSDCtyBMYWJvcmF0b3JpbyA1IMK3IERpYWdyYW1hIGNvbmNlcHR1YWw8L3RleHQ+PC9nPjwvc3ZnPgo=" alt="Componentes del job de respaldo." loading="lazy"/><figcaption>Componentes del job de respaldo.</figcaption><button type="button" class="zoom-btn" onclick="openDiagram(this)">Ampliar diagrama</button></figure>
-<p>El <code>docker-compose.yml</code> de la clase activa SQL Agent con <code>MSSQL_AGENT_ENABLED</code>. Este bloque crea el job, su paso y su programación en la base del sistema <code>msdb</code>:</p>
+<google-codelab-step label="Programar con SQL Agent" duration="8">
+<p><strong>SQL Server Agent</strong> ejecuta tareas administrativas en segundo plano. Un <strong>job</strong> agrupa uno o más pasos (<strong>steps</strong>) y se ejecuta según una programación (<strong>schedule</strong>). Las <strong>alertas</strong> y los <strong>operadores</strong> permiten notificar errores.</p>
+<figure><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAwIDM2NiIgcm9sZT0iaW1nIiBhcmlhLWxhYmVsbGVkYnk9InRpdGxlIGRlc2MiPjx0aXRsZSBpZD0idGl0bGUiPlVuIGpvYiBkZSByZXNwYWxkbyBlbiBTUUwgQWdlbnQ8L3RpdGxlPjxkZXNjIGlkPSJkZXNjIj5FbCBqb2IgY29udGllbmUgdW4gcGFzbyBjb24gZWwgQkFDS1VQIERBVEFCQVNFIHkgdW5hIHByb2dyYW1hY2nDs24gZGlhcmlhIGEgbGFzIDIyOjAwIGRlbCBzZXJ2aWRvci4gQ2FkYSBlamVjdWNpw7NuIHF1ZWRhIGVuIGVsIGhpc3RvcmlhbCBkZSBtc2RiLjwvZGVzYz48ZGVmcz48bWFya2VyIGlkPSJhIiB2aWV3Qm94PSIwIDAgMTAgMTAiIHJlZlg9IjkiIHJlZlk9IjUiIG1hcmtlcldpZHRoPSI4IiBtYXJrZXJIZWlnaHQ9IjgiIG9yaWVudD0iYXV0by1zdGFydC1yZXZlcnNlIj48cGF0aCBkPSJNIDAgMCBMIDEwIDUgTCAwIDEwIFoiIGZpbGw9IiM0MjYxN2YiLz48L21hcmtlcj48L2RlZnM+PHJlY3Qgd2lkdGg9IjEwMDAiIGhlaWdodD0iMzY2IiByeD0iMTYiIGZpbGw9IiNmOGZhZmMiLz48ZyBmb250LWZhbWlseT0iU2Vnb2UgVUksQXJpYWwsc2Fucy1zZXJpZiI+PHRleHQgeD0iMzIiIHk9IjQ0IiBmb250LXNpemU9IjI3IiBmaWxsPSIjMTcyZTQ5IiBmb250LXdlaWdodD0iNzAwIj5VbiBqb2IgZGUgcmVzcGFsZG8gZW4gU1FMIEFnZW50PC90ZXh0Pjx0ZXh0IHg9IjMyIiB5PSI3NSIgZm9udC1zaXplPSIxNyIgZmlsbD0iIzUyNjc3ZCIgZm9udC13ZWlnaHQ9IjQwMCI+RWwgc2VydmljaW8gZWplY3V0YSBlbCBwYXNvIGRlbCBqb2IgY3VhbmRvIGxsZWdhIHN1IHByb2dyYW1hY2nDs24gbyBjdWFuZG8gc2UgaW5pY2lhIGEgbWFuby48L3RleHQ+PHJlY3QgeD0iMzIiIHk9IjExMCIgd2lkdGg9IjI5MCIgaGVpZ2h0PSIxNDAiIHJ4PSIxMiIgZmlsbD0iI2VhZjFmYyIgc3Ryb2tlPSIjMjc1ZGFkIiBzdHJva2Utd2lkdGg9IjEuNSIvPjx0ZXh0IHg9IjUyIiB5PSIxNDQiIGZvbnQtc2l6ZT0iMjAiIGZpbGw9IiMyNzVkYWQiIGZvbnQtd2VpZ2h0PSI2NTAiPkpvYjwvdGV4dD48dGV4dCB4PSI1MiIgeT0iMTc4IiBmb250LXNpemU9IjE3IiBmaWxsPSIjMjUzYzU1Ij5SZXNwYWxkbyBkaWFyaW8gTm90YXNMYWIwNTwvdGV4dD48dGV4dCB4PSI1MiIgeT0iMjA2IiBmb250LXNpemU9IjE1IiBmaWxsPSIjNTI2NzdkIj5zcF9hZGRfam9iIMK3IHNwX2FkZF9qb2JzZXJ2ZXI8L3RleHQ+PHJlY3QgeD0iMzU1IiB5PSIxMTAiIHdpZHRoPSIyOTAiIGhlaWdodD0iMTQwIiByeD0iMTIiIGZpbGw9IiNlNWY1ZWYiIHN0cm9rZT0iIzA4N2M2MSIgc3Ryb2tlLXdpZHRoPSIxLjUiLz48dGV4dCB4PSIzNzUiIHk9IjE0NCIgZm9udC1zaXplPSIyMCIgZmlsbD0iIzA4N2M2MSIgZm9udC13ZWlnaHQ9IjY1MCI+U3RlcDwvdGV4dD48dGV4dCB4PSIzNzUiIHk9IjE3OCIgZm9udC1zaXplPSIxNSIgZmlsbD0iIzE3MmU0OSIgZm9udC1mYW1pbHk9IkNvbnNvbGFzLENhc2NhZGlhIE1vbm8sbW9ub3NwYWNlIj5CQUNLVVAgREFUQUJBU0UgTm90YXNMYWIwNTwvdGV4dD48dGV4dCB4PSIzNzUiIHk9IjIwMiIgZm9udC1zaXplPSIxNSIgZmlsbD0iIzE3MmU0OSIgZm9udC1mYW1pbHk9IkNvbnNvbGFzLENhc2NhZGlhIE1vbm8sbW9ub3NwYWNlIj5XSVRIIElOSVQsIENPTVBSRVNTSU9OPC90ZXh0Pjx0ZXh0IHg9IjM3NSIgeT0iMjMwIiBmb250LXNpemU9IjE1IiBmaWxsPSIjNTI2NzdkIj5zcF9hZGRfam9ic3RlcDwvdGV4dD48cmVjdCB4PSI2NzgiIHk9IjExMCIgd2lkdGg9IjI5MCIgaGVpZ2h0PSIxNDAiIHJ4PSIxMiIgZmlsbD0iI2ZkZjNlMyIgc3Ryb2tlPSIjOWE1YTAwIiBzdHJva2Utd2lkdGg9IjEuNSIvPjx0ZXh0IHg9IjY5OCIgeT0iMTQ0IiBmb250LXNpemU9IjIwIiBmaWxsPSIjOWE1YTAwIiBmb250LXdlaWdodD0iNjUwIj5TY2hlZHVsZTwvdGV4dD48dGV4dCB4PSI2OTgiIHk9IjE3OCIgZm9udC1zaXplPSIxNyIgZmlsbD0iIzI1M2M1NSI+RGlhcmlvIGEgbGFzIDIyOjAwPC90ZXh0Pjx0ZXh0IHg9IjY5OCIgeT0iMjAyIiBmb250LXNpemU9IjE1IiBmaWxsPSIjMjUzYzU1Ij5ob3JhIGRlbCBzZXJ2aWRvciAoVVRDKTwvdGV4dD48dGV4dCB4PSI2OTgiIHk9IjIzMCIgZm9udC1zaXplPSIxNSIgZmlsbD0iIzUyNjc3ZCI+c3BfYWRkX3NjaGVkdWxlPC90ZXh0PjxwYXRoIGQ9Ik0gMzIyIDE4MCBMIDM1NSAxODAiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzQyNjE3ZiIgc3Ryb2tlLXdpZHRoPSIyLjUiIG1hcmtlci1lbmQ9InVybCgjYSkiLz48cGF0aCBkPSJNIDY3OCAxODAgTCA2NDUgMTgwIiBmaWxsPSJub25lIiBzdHJva2U9IiM0MjYxN2YiIHN0cm9rZS13aWR0aD0iMi41IiBtYXJrZXItZW5kPSJ1cmwoI2EpIi8+PHBhdGggZD0iTSA1MDAgMjUwIEwgNTAwIDI4MiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjNDI2MTdmIiBzdHJva2Utd2lkdGg9IjIuNSIgbWFya2VyLWVuZD0idXJsKCNhKSIvPjxyZWN0IHg9IjMyIiB5PSIyODQiIHdpZHRoPSI5MzYiIGhlaWdodD0iNTgiIHJ4PSIxMiIgZmlsbD0iI2ZmZmZmZiIgc3Ryb2tlPSIjYjljYmUwIiBzdHJva2Utd2lkdGg9IjEuNSIvPjx0ZXh0IHg9IjUyIiB5PSIzMTkiIGZvbnQtc2l6ZT0iMTciIGZpbGw9IiMyNTNjNTUiPjx0c3BhbiBmb250LXdlaWdodD0iNjAwIj5IaXN0b3JpYWw6PC90c3Bhbj4gbXNkYi5kYm8uc3lzam9iaGlzdG9yeSByZWdpc3RyYSBzaSBjYWRhIGVqZWN1Y2nDs24gdGVybWluw7MgY29uIMOpeGl0byBvIGNvbiBlcnJvci48L3RleHQ+PC9nPjwvc3ZnPg0K" alt="Componentes del job de respaldo." loading="lazy"/><button type="button" class="zoom-btn" onclick="openDiagram(this)">Ampliar diagrama</button></figure>
+<p>Este bloque crea un job que respalda <code>NotasLab05</code> todos los días a las 22:00:</p>
 <div class="code-container"><div class="code-toolbar"><span>SQL</span><button type="button" class="copy-btn" onclick="copyCode(this)">Copiar código</button></div><pre><code class="language-sql">USE msdb;
 GO
 EXEC dbo.sp_add_job
@@ -714,144 +343,39 @@ EXEC dbo.sp_add_jobserver
      @job_name = N&#39;Respaldo diario NotasLab05&#39;;
 GO
 </code></pre></div>
-<ul>
-<li><code>sp_add_jobstep</code> define el paso. Dentro de <code>@command</code>, las comillas de la ruta se escriben dobles (<code>&#39;&#39;</code>) porque el comando es una cadena de texto.</li>
-<li>En <code>sp_add_schedule</code>, <code>@freq_type = 4</code> indica una frecuencia diaria, <code>@freq_interval = 1</code> repite cada día y <code>@active_start_time = 220000</code> fija las 22:00:00.</li>
-<li><code>sp_add_jobserver</code> asigna el job al servidor local para que SQL Agent lo ejecute.</li>
-</ul>
+<p><code>@freq_type = 4</code> indica una frecuencia diaria y <code>@active_start_time = 220000</code>, las 22:00:00. <code>COMPRESSION</code> reduce el tamaño del archivo.</p>
 <aside class="learning-tip" role="note">
-<p><strong>Consejo:</strong> SQL Agent utiliza el reloj del servidor. En el contenedor ese reloj está en UTC, de modo que las 22:00 del servidor corresponden a las 4:00 p. m. en El Salvador.</p>
+<p><strong>Consejo:</strong> SQL Agent utiliza el reloj del servidor, que en el contenedor está en UTC: las 22:00 corresponden a las 4:00 p. m. en El Salvador.</p>
 </aside>
-<p>Para no esperar a la hora programada, el job se ejecuta de inmediato:</p>
-<div class="code-container"><div class="code-toolbar"><span>SQL</span><button type="button" class="copy-btn" onclick="copyCode(this)">Copiar código</button></div><pre><code class="language-sql">EXEC msdb.dbo.sp_start_job
-     @job_name = N&#39;Respaldo diario NotasLab05&#39;;
+<p>Para probarlo sin esperar, se ejecuta de inmediato:</p>
+<div class="code-container"><div class="code-toolbar"><span>SQL</span><button type="button" class="copy-btn" onclick="copyCode(this)">Copiar código</button></div><pre><code class="language-sql">EXEC msdb.dbo.sp_start_job @job_name = N&#39;Respaldo diario NotasLab05&#39;;
 GO
 </code></pre></div>
-<p><code>sp_start_job</code> solo inicia el job; la ejecución continúa en segundo plano. Unos segundos después, el historial muestra el resultado:</p>
-<div class="code-container"><div class="code-toolbar"><span>SQL</span><button type="button" class="copy-btn" onclick="copyCode(this)">Copiar código</button></div><pre><code class="language-sql">SELECT h.step_name AS Paso,
-       h.run_status AS Estado,
-       h.run_date AS Fecha,
-       h.run_time AS Hora,
-       h.message AS Mensaje
+<p>Unos segundos después, el historial muestra el resultado:</p>
+<div class="code-container"><div class="code-toolbar"><span>SQL</span><button type="button" class="copy-btn" onclick="copyCode(this)">Copiar código</button></div><pre><code class="language-sql">SELECT h.step_name, h.run_status, h.message
 FROM msdb.dbo.sysjobhistory AS h
 JOIN msdb.dbo.sysjobs AS j ON j.job_id = h.job_id
-WHERE j.name = N&#39;Respaldo diario NotasLab05&#39;
-ORDER BY h.instance_id;
+WHERE j.name = N&#39;Respaldo diario NotasLab05&#39;;
 GO
 </code></pre></div>
-<p><code>Estado = 1</code> indica éxito y <code>0</code>, error. La fila <code>(Job outcome)</code> resume la ejecución completa. <code>Fecha</code> y <code>Hora</code> se guardan como números con los formatos AAAAMMDD y HHMMSS; por ejemplo, <code>41430</code> equivale a las 04:14:30 del servidor. En SSMS, el mismo historial se consulta en <strong>Agente SQL Server → Trabajos</strong>, con clic derecho sobre el job y <strong>Ver historial</strong>.</p>
-<p>Esta consulta compara el tamaño de los respaldos completos de la guía:</p>
-<div class="code-container"><div class="code-toolbar"><span>SQL</span><button type="button" class="copy-btn" onclick="copyCode(this)">Copiar código</button></div><pre><code class="language-sql">SELECT bmf.physical_device_name AS Archivo,
-       bs.backup_size / 1024 AS TamanoKB,
-       bs.compressed_backup_size / 1024 AS ComprimidoKB
-FROM msdb.dbo.backupset AS bs
-JOIN msdb.dbo.backupmediafamily AS bmf
-  ON bmf.media_set_id = bs.media_set_id
-WHERE bs.database_name = N&#39;NotasLab05&#39; AND bs.type = &#39;D&#39;
-ORDER BY bs.backup_set_id;
-GO
-</code></pre></div>
-<p>En los respaldos sin <code>COMPRESSION</code>, las dos columnas coinciden. <strong>El respaldo del job ocupa menos espacio en disco</strong> porque se guardó comprimido.</p>
-<aside class="learning-tip" role="note">
-<p><strong>Consejo:</strong> un job también puede notificar a un operador cuando falla. Esa notificación requiere configurar Database Mail, como se muestra en la clase de SQL Agent.</p>
-</aside>
+<p><code>run_status = 1</code> indica éxito. En SSMS, el historial también se consulta en <strong>Agente SQL Server → Trabajos</strong>, con clic derecho sobre el job y <strong>Ver historial</strong>.</p>
 <h3>Limpieza opcional</h3>
-<p>Conserva los objetos hasta terminar de revisar la guía. Para repetirla desde cero, este bloque elimina el job, el historial de respaldos, la base y el login:</p>
+<p>Para repetir la guía desde cero, este bloque elimina el job, el historial de respaldos y la base:</p>
 <div class="code-container"><div class="code-toolbar"><span>SQL</span><button type="button" class="copy-btn" onclick="copyCode(this)">Copiar código</button></div><pre><code class="language-sql">-- LIMPIEZA OPCIONAL
-USE msdb;
-GO
-EXEC dbo.sp_delete_job
+EXEC msdb.dbo.sp_delete_job
      @job_name = N&#39;Respaldo diario NotasLab05&#39;,
      @delete_unused_schedule = 1;
-EXEC dbo.sp_delete_database_backuphistory
+EXEC msdb.dbo.sp_delete_database_backuphistory
      @database_name = N&#39;NotasLab05&#39;;
 GO
 USE master;
 GO
 DROP DATABASE NotasLab05;
-DROP LOGIN loginRespaldo;
 GO
 </code></pre></div>
-<p>Después se borran los archivos de respaldo desde PowerShell:</p>
+<p>Después se borran los archivos desde PowerShell:</p>
 <div class="code-container"><div class="code-toolbar"><span>POWERSHELL</span><button type="button" class="copy-btn" onclick="copyCode(this)">Copiar código</button></div><pre><code class="language-powershell">docker exec sqlserver-2025 rm -rf /backup/NotasLab05
 </code></pre></div>
-</google-codelab-step>
-<google-codelab-step label="Comandos de copias de seguridad" duration="5">
-<p>Esta tabla reúne <strong>los comandos utilizados en la guía</strong>. Los ejemplos son una referencia de sintaxis; no constituyen una segunda secuencia de ejecución.</p>
-<div class="table-scroll"><table>
-<thead>
-<tr>
-<th>Comando</th>
-<th>Uso</th>
-<th>Ejemplo</th>
-</tr>
-</thead>
-<tbody><tr>
-<td><code>ALTER DATABASE ... SET RECOVERY</code></td>
-<td>Cambiar el modelo de recuperación.</td>
-<td><code>ALTER DATABASE NotasLab05 SET RECOVERY FULL;</code></td>
-</tr>
-<tr>
-<td><code>BACKUP DATABASE</code></td>
-<td>Crear un respaldo completo.</td>
-<td><code>BACKUP DATABASE NotasLab05 TO DISK=&#39;/backup/NotasLab05/NotasLab05_full.bak&#39; WITH FORMAT, INIT;</code></td>
-</tr>
-<tr>
-<td><code>BACKUP DATABASE ... WITH DIFFERENTIAL</code></td>
-<td>Respaldar lo que cambió desde el último completo.</td>
-<td><code>BACKUP DATABASE NotasLab05 TO DISK=&#39;/backup/NotasLab05/NotasLab05_diff.bak&#39; WITH DIFFERENTIAL, INIT;</code></td>
-</tr>
-<tr>
-<td><code>BACKUP LOG</code></td>
-<td>Respaldar el registro de transacciones.</td>
-<td><code>BACKUP LOG NotasLab05 TO DISK=&#39;/backup/NotasLab05/NotasLab05_log.trn&#39; WITH INIT;</code></td>
-</tr>
-<tr>
-<td><code>RESTORE VERIFYONLY</code></td>
-<td>Comprobar que un respaldo esté completo y sea legible.</td>
-<td><code>RESTORE VERIFYONLY FROM DISK=&#39;/backup/NotasLab05/NotasLab05_full.bak&#39;;</code></td>
-</tr>
-<tr>
-<td><code>RESTORE DATABASE ... WITH NORECOVERY</code></td>
-<td>Restaurar y esperar el siguiente respaldo.</td>
-<td><code>RESTORE DATABASE NotasLab05 FROM DISK=&#39;/backup/NotasLab05/NotasLab05_full.bak&#39; WITH NORECOVERY;</code></td>
-</tr>
-<tr>
-<td><code>RESTORE LOG ... WITH RECOVERY</code></td>
-<td>Aplicar el último respaldo y abrir la base.</td>
-<td><code>RESTORE LOG NotasLab05 FROM DISK=&#39;/backup/NotasLab05/NotasLab05_log.trn&#39; WITH RECOVERY;</code></td>
-</tr>
-<tr>
-<td><code>msdb.dbo.backupset</code></td>
-<td>Consultar el historial de respaldos.</td>
-<td><code>SELECT name, type FROM msdb.dbo.backupset WHERE database_name=N&#39;NotasLab05&#39;;</code></td>
-</tr>
-<tr>
-<td><code>sqlcmd ... -o</code></td>
-<td>Guardar el resultado de una consulta en un archivo.</td>
-<td><code>sqlcmd -S localhost -U sa -P &quot;...&quot; -C -Q &quot;SELECT ...&quot; -o /backup/NotasLab05/calificaciones.csv -s&quot;,&quot;</code></td>
-</tr>
-<tr>
-<td><code>bcp ... out</code> y <code>bcp ... in</code></td>
-<td>Exportar o importar los datos de una tabla.</td>
-<td><code>bcp NotasLab05.dbo.Calificacion out /backup/NotasLab05/calificacion.dat -n -S localhost -U sa -P &quot;...&quot; -u</code></td>
-</tr>
-<tr>
-<td><code>ALTER ROLE db_backupoperator</code></td>
-<td>Delegar la creación de respaldos.</td>
-<td><code>ALTER ROLE db_backupoperator ADD MEMBER usuarioRespaldo;</code></td>
-</tr>
-<tr>
-<td><code>sp_add_job</code>, <code>sp_add_jobstep</code> y <code>sp_add_schedule</code></td>
-<td>Crear un job programado de SQL Agent.</td>
-<td><code>EXEC msdb.dbo.sp_add_job @job_name=N&#39;Respaldo diario NotasLab05&#39;;</code></td>
-</tr>
-<tr>
-<td><code>sp_start_job</code></td>
-<td>Ejecutar un job de inmediato.</td>
-<td><code>EXEC msdb.dbo.sp_start_job @job_name=N&#39;Respaldo diario NotasLab05&#39;;</code></td>
-</tr>
-</tbody></table></div>
 </google-codelab-step>
 <google-codelab-step label="Ejercicio práctico" duration="5">
 <p><strong>Desarrolla el ejercicio práctico siguiendo las indicaciones del instructor del laboratorio.</strong> El instructor proporcionará el enunciado y las orientaciones para su realización.</p>
@@ -874,11 +398,11 @@ GO
 </tbody></table></div>
 <h3>Material de clase de referencia</h3>
 <ul>
-<li><strong>23_Copias de seguridad:</strong> casos de pérdida de datos, plan de contingencia (RPO, RTO, WRT y MTD), tipos de respaldo, comandos de respaldo y restauración, y práctica con <code>bcp</code> y <code>sqlcmd</code>.</li>
-<li><strong>22_SQL Agent:</strong> jobs, pasos, programaciones, alertas y operadores, y la práctica de un respaldo completo diario.</li>
-<li><strong>14_Administración de privilegios y roles</strong> y <strong>Roles predefinidos de base de datos:</strong> rol <code>db_backupoperator</code> para delegar respaldos.</li>
+<li><strong>23_Copias de seguridad:</strong> casos de pérdida de datos, plan de contingencia, tipos de respaldo, respaldo y restauración, y respaldos lógicos.</li>
+<li><strong>22_SQL Agent:</strong> jobs, pasos, programaciones, alertas y operadores.</li>
 </ul>
-<p>Los ejemplos adaptan esos contenidos a <code>NotasLab05</code> y al contenedor Docker de la clase. Los datos son ficticios. Los tamaños de los archivos y las horas dependen del equipo y del reloj del servidor.</p>
+<p>Los ejemplos adaptan esos contenidos a <code>NotasLab05</code> y al contenedor Docker de la clase. Los datos son ficticios.</p>
+<figure class="license-badge"><img src="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gIoSUNDX1BST0ZJTEUAAQEAAAIYAAAAAAQwAABtbnRyUkdCIFhZWiAAAAAAAAAAAAAAAABhY3NwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAA9tYAAQAAAADTLQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAlkZXNjAAAA8AAAAHRyWFlaAAABZAAAABRnWFlaAAABeAAAABRiWFlaAAABjAAAABRyVFJDAAABoAAAAChnVFJDAAABoAAAAChiVFJDAAABoAAAACh3dHB0AAAByAAAABRjcHJ0AAAB3AAAADxtbHVjAAAAAAAAAAEAAAAMZW5VUwAAAFgAAAAcAHMAUgBHAEIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFhZWiAAAAAAAABvogAAOPUAAAOQWFlaIAAAAAAAAGKZAAC3hQAAGNpYWVogAAAAAAAAJKAAAA+EAAC2z3BhcmEAAAAAAAQAAAACZmYAAPKnAAANWQAAE9AAAApbAAAAAAAAAABYWVogAAAAAAAA9tYAAQAAAADTLW1sdWMAAAAAAAAAAQAAAAxlblVTAAAAIAAAABwARwBvAG8AZwBsAGUAIABJAG4AYwAuACAAMgAwADEANv/bAEMAAwICAgICAwICAgMDAwMEBgQEBAQECAYGBQYJCAoKCQgJCQoMDwwKCw4LCQkNEQ0ODxAQERAKDBITEhATDxAQEP/bAEMBAwMDBAMECAQECBALCQsQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEP/AABEIAB8AWAMBIgACEQEDEQH/xAAcAAACAgMBAQAAAAAAAAAAAAAHCAAGBAUJAgP/xAAwEAAABgIBBAIABAUFAAAAAAABAgMEBQYHERIACBMhFCIJFSMxFhcyQWEYJEJjof/EABUBAQEAAAAAAAAAAAAAAAAAAAAB/8QAGBEBAQEBAQAAAAAAAAAAAAAAAAERITH/2gAMAwEAAhEDEQA/ANxTab220zttrmbM2UuryKkjAs5qXl5qNRkpKVkniIOFhFZwBlV11VlFBABMOt/8SF9VylYvzXnZunbcMdguDavTXgeSOfX2DRK4epCGyqlTRAhylMGhAeBijyDRzBs3UxhR2ueM09reF7cmDum1fFEZfX0cfQpPnAIggmVQv7HKB0kfQ7+plA/Yw9HrG/e73C5GqM13EwWFKmthCEcy3yB/OlEZ9GPYNzrHeCQwCibYE4gkUOQmHj6KHl6kiSF7l02eAplhHd5nY5jKswMuuVs0uFWrzR3FpqjsQIsTShyb0I+zAfRDCUhg2IHh7279vyzZF/GYcx64auUyrt1ka8yMRVMwAJTFMCehKICAgIevYa6t2GrpnbvEoqKOc8G0UMN5Ngniqa0dMqKP44oHEqBV01S6OqYQA5FEgLwEoHESmACdCDshc2BPCU3j6yvxeuMb3GVpyDgffNFsKRi/50ArGKUN+ilKAegDqWJYHo49rWQlbtK4hwRiGLpGNk3Ktmu1orhVWJfjJmUcpNGrRLzuTJlIfkYogGyiAbES8vY42gcfIU6w5ZwLiCVomRAZjW7vVq6RJkJnaQKtUnbR2kC7cypBAQMOy7EAHQ70T8azc0r+Flcqdiy5K03IeLoyTLYDNXR0X0e7ZPVHjr7p/qFM5QTV4KB+4q/uHE2pkubmkPwr6dUsqXFW45ByfGRhYBR06Os+fu3r1N41+6n3MZsgolzUH9hR/ceRd3FwP7RQscv8ixGEMPdueObDfZtsd7wfxDRtHxbQu9uXSgJCYQHibSZAE5uI6/tvUrYfXgoawXZlivtzyxAUpdVtbGlFhAQlIkyRQOsqRN0UxHSZC7H6CAm0IBvRuN+xnirCmSc95kpWXau4d2qVjoufpqjR8LWQdtEGficJsTicpPKRZEdlMOtKCI/XmPWrwFbcw4Aa3i00rGRJTG9Ejk42dXyAxj6/NNQbcjGi0Xrf6uypAqAlOqTRhWApQLsA6knEk41Nvje2yvUaHuUBg2nWZa0Hbt65Gx9cZivKuFy8kkybT+ocdmMYQ+oFHYb0A4pe3uwnm/4XJVOz8135ib+XwIlGW9E8gtfk8fF8nj/18N+9699Y3bdIQuN7X213m/RwQNZM5tDRBd2oBUohWWFRSMFQR9EAURFIDD6Jz9iAb6sdtx07XxxYu3iCw/fJPMMjfjSbK1SdaQQI1IZ0VUXYSLYOPh8fk++/6lDiBSF4kKkJFTmq9iSbwtfLXX8QRVDu9EayJl0mceiwla/OR6YrJmTctgIcpiKppnIoQwAYuv7CYvU6sWaJ2Du1s7s7zTlUnsCvXEoT8zbiHgkJJjEOCPFCa9CBRUSTEweh8foRDQ9TqxYpFNyjHUBjgPvEx0r/ABTFY3q7Gg5Fj2RTfJZNPjgQTCmbQ/pqKKmAw6KYxUtGEhhMDi4j7PuzrIPx8rYssk5YKVJv3E0jWm1jWNXU3q6IpqnFiGhTU4HEpkziAgA8BLxAC9caqBkjKvallOaYtUW7eUinTmBscE9Erlk8FJQyS7ZcpDCRQoGA4AYph/vxEQEdmCOzX2cKvz2uMrucMUzbzZnjPH061IyE472JDLGKYA9m0UpSlAB0AAHRXQPINU7Wvw440mS2dut03aI6PesaJS5OzKvEkFHRhExGrQNeJAx9eRQ3IAAN/ZQS7D2HsnY17ScVM6t3AX5GJv12fOrjMx/w3Dldsu7EgACpUEz+M3BNPYG4/bmAbAu+lXS7ke3LFTpS2YSxhbbTfFPbe0ZIfIuVmCmtAomigYSHOHrRh4mDQe9bAVmtVqsV3sUhbbbMOZSYlFjOHbtwbkdU4/8AgAAAAAUNAAAAAAAAB09T10QtvcF2hTdxNkOq54tdGtSxCoupqqoybBy8RLrim4D4xk1igAAH3II6AA3oAAPjX8+9osbbQyBac72m9WpMh0m0zakJJ84ZpG3yTbl+MVNEo7H+ggD7EN6Eelqx73E02pdqFhwdJI2BWYlJiXfkbooiMc5I7ZsEETKmM7BDmgo0UVDzMHRw+gtlWSwg5TH+TsvOb9Wa5FJruyvlG4yFzcKIJJDOz5XDpNJ+sdP7ODlYGak5q6N5jvVdCq6cLLsMPLf+5Ds0yOixNOZKeNZKIWFzFS8bHyjSQjVvX6jddNADEH0Gw9gOg2A6DVff5t7WbUsxLlPumyRkaOjTEUbRNpUkXLAFSDsqp0E2iZVThsfanL/PSdYYyrFYuY5ALJV1pOHtdXTgW7F80K4ZLD+bxzpUrgOZDpkM3aLkKqiYFk1DJnSMmcpVSFW9dzGNLDV5mv1Jjda6zVh2EaSNEGLolhIlXIyKRQlVzFAhiR7hgu7bKA2UOc7o5kixyogsVhhp7N3adndyr7uq2i7NpKJfJ+JdovBSAkMUNCGv0NlEBABAQ0ICACAgIAPVF/nf24fkY0//AFnZk/hUf0/yD8yk/ifH1x+Ny+J5/Dx+vDy6166QipvmcXaoaTkXHx2jSQbrrq/laEn40yKFMY3w3BioutAAj4VTAmp/SYQKYR6b+K728ZxOR5K1S9ctd1aTEhWo58vYXsiqoattxfGlmSCSssssVFYXDX/YO3j1muokqqsUpTJIIswzBHuPcz2oR+C7RjPG9tbtCL1uRjoyPQhn6ZTLKt1CkLyOiAbMc3s5x9iIiYf3Hqdc+KpV5272iHpdXY/NmZ9+3i45t5SJ+d0uoVNInM4gQvI5ihswgAb2IgHvqdJMJMf/2Q==" alt="Licencia Creative Commons BY-NC-SA 4.0." width="88" height="31" loading="lazy"/></figure>
 <p>Este trabajo se distribuye bajo la licencia <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/">Creative Commons Atribución-NoComercial-CompartirIgual 4.0 Internacional</a>.</p>
 </google-codelab-step>
 </google-codelab>

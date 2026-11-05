@@ -1,6 +1,6 @@
 /* Ejecuta en orden los bloques SQL y PowerShell de G05.md contra el contenedor y comprueba sus resultados.
    Uso: node scripts/verify-guide.cjs CONTENEDOR DIRECTORIO_RESULTADOS
-   Requiere que no existan NotasLab05, loginRespaldo ni el job de la guía. Termina con la limpieza de la guía. */
+   Requiere que no existan NotasLab05 ni el job de la guía. Termina con la limpieza de la guía. */
 const fs = require('node:fs');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
@@ -18,9 +18,8 @@ for (const m of source.matchAll(/^## (.+)$|^### (.+)$|^```(sql|powershell)\n([\s
   else records.push({ section, topic, lang: m[3], code: m[4] });
 }
 
-function sql(text, { failOnError = true } = {}) {
-  const flags = (failOnError ? '-b ' : '') + '-V 11 -f 65001 -w 65535';
-  const command = 'export SQLCMDPASSWORD="$MSSQL_SA_PASSWORD"; exec /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -d master -C ' + flags;
+function sql(text) {
+  const command = 'export SQLCMDPASSWORD="$MSSQL_SA_PASSWORD"; exec /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -d master -C -b -V 11 -f 65001 -w 65535';
   const r = spawnSync('docker', ['exec', '-i', container, '/bin/bash', '-lc', command], { input: text, encoding: 'utf8', timeout: 120000 });
   return { status: r.status, out: (r.stdout || '') + (r.stderr || '') };
 }
@@ -29,66 +28,48 @@ function ps(text) {
   return { status: r.status, out: (r.stdout || '') + (r.stderr || '') };
 }
 const has = (...parts) => out => parts.every(p => out.includes(p));
+const count = n => `IF (SELECT COUNT(*) FROM NotasLab05.dbo.Calificacion)<>${n} THROW 52001,N'Conteo distinto de ${n}',1;`;
+const backup = (type, name) => `IF NOT EXISTS(SELECT 1 FROM msdb.dbo.backupset WHERE database_name=N'NotasLab05' AND type='${type}' AND name=N'${name}') THROW 52003,N'Falta respaldo ${type}',1;`;
 
 // Comprobaciones posteriores a cada bloque: SQL que lanza THROW si algo no cumple, o una prueba sobre la salida.
 function checksFor(r) {
   const s = r.code;
   if (r.lang === 'powershell') {
-    if (s.startsWith('docker ps')) return { out: has('sqlserver-2025', 'Up') };
     if (s.includes('mkdir -p /backup/NotasLab05')) return { out: has('mssql', '/backup/NotasLab05') };
-    if (s.includes('ls -l /backup/NotasLab05')) return { out: has('NotasLab05_full.bak') };
-    if (s.includes('-o /backup/NotasLab05/calificaciones.csv')) return { out: out => out.includes('Ana Martínez') && out.includes('Andrés') === false && (out.match(/^\d+,/gm) || []).length === 9 };
     if (s.includes(' out /backup/NotasLab05/calificacion.dat')) return { out: has('9 rows copied') };
-    if (s.includes(' in /backup/NotasLab05/calificacion.dat')) return { out: has('9 rows copied') };
+    if (s.includes(' in /backup/NotasLab05/calificacion.dat')) return { out: has('9 rows copied'), sql: count(9) };
     if (s.includes('rm -rf /backup/NotasLab05')) return { after: () => ps(`docker exec ${container} sh -c "test -e /backup/NotasLab05 && echo EXISTE || echo NOEXISTE"`).out.includes('NOEXISTE') };
     return {};
   }
-  const count = n => `IF (SELECT COUNT(*) FROM NotasLab05.dbo.Calificacion)<>${n} THROW 52001,N'Conteo distinto de ${n}',1;`;
-  const state = st => `IF (SELECT state_desc FROM sys.databases WHERE name=N'NotasLab05')<>N'${st}' THROW 52002,N'Estado distinto de ${st}',1;`;
-  const backup = (type, name) => `IF NOT EXISTS(SELECT 1 FROM msdb.dbo.backupset WHERE database_name=N'NotasLab05' AND type='${type}'${name ? ` AND name=N'${name}'` : ''}) THROW 52003,N'Falta respaldo ${type}',1;`;
+  if (s.includes('LIMPIEZA OPCIONAL')) return { sql: `IF DB_ID(N'NotasLab05') IS NOT NULL THROW 52018,N'Quedo la base',1;
+IF EXISTS(SELECT 1 FROM msdb.dbo.sysjobs WHERE name=N'Respaldo diario NotasLab05') OR EXISTS(SELECT 1 FROM msdb.dbo.sysschedules WHERE name=N'Diario 10 p. m.') THROW 52019,N'Quedo el job',1;
+IF EXISTS(SELECT 1 FROM msdb.dbo.backupset WHERE database_name=N'NotasLab05') THROW 52020,N'Quedo historial',1;` };
   if (s.includes('CREATE TABLE dbo.Calificacion')) return { sql: count(6) + `IF (SELECT recovery_model_desc FROM sys.databases WHERE name=N'NotasLab05')<>N'FULL' THROW 52004,N'Modelo no FULL',1;` };
-  if (s.includes("NotasLab05_full.bak'\nWITH FORMAT")) return { sql: backup('D', 'Respaldo completo NotasLab05'), out: has('BACKUP DATABASE successfully processed') };
-  if (s.includes('VALUES (7,')) return { sql: count(8) };
-  if (s.includes('WITH DIFFERENTIAL')) return { sql: backup('I', 'Respaldo diferencial NotasLab05'), out: has('BACKUP DATABASE WITH DIFFERENTIAL successfully processed') };
-  if (s.includes('VALUES (9,')) return { sql: count(9) + `IF (SELECT nota FROM NotasLab05.dbo.Calificacion WHERE calificacion_id=2)<>7.25 THROW 52005,N'Nota 2 no corregida',1;` };
-  if (s.startsWith('BACKUP LOG')) return { sql: backup('L', 'Respaldo del log NotasLab05'), out: has('BACKUP LOG successfully processed') };
-  if (s.includes('VALUES (10,')) return { sql: count(10), out: has('10') };
-  if (s.includes('FROM msdb.dbo.backupset AS bs') && s.includes('bs.type AS Tipo')) return { out: out => /Respaldo completo NotasLab05\s+D/.test(out) && /Respaldo diferencial NotasLab05\s+I/.test(out) && /Respaldo del log NotasLab05\s+L/.test(out) };
-  if (s.startsWith('RESTORE VERIFYONLY')) return { out: has('The backup set on file 1 is valid.') };
-  if (s.includes('DROP DATABASE NotasLab05;') && !s.includes('LIMPIEZA')) return { sql: `IF DB_ID(N'NotasLab05') IS NOT NULL THROW 52006,N'La base sigue existiendo',1;` };
-  if (s.includes('NotasLab05_full.bak') && s.startsWith('RESTORE DATABASE')) return { sql: state('RESTORING'), out: has('RESTORING') };
-  if (s.includes('NotasLab05_diff.bak') && s.startsWith('RESTORE DATABASE')) return { sql: state('RESTORING') };
-  if (s.startsWith('RESTORE LOG')) return { sql: state('ONLINE'), out: has('ONLINE') };
-  if (s.includes('ORDER BY calificacion_id;') && s.startsWith('USE NotasLab05;\nGO\nSELECT')) return {
-    sql: count(9) + `IF EXISTS(SELECT 1 FROM NotasLab05.dbo.Calificacion WHERE calificacion_id=10) THROW 52007,N'La nota 10 no debia recuperarse',1;
+  if (s.includes('BACKUP LOG NotasLab05')) return {
+    out: has('BACKUP DATABASE successfully processed', 'BACKUP DATABASE WITH DIFFERENTIAL successfully processed', 'BACKUP LOG successfully processed', 'The backup set on file 1 is valid.'),
+    sql: backup('D', 'Respaldo completo NotasLab05') + backup('I', 'Respaldo diferencial NotasLab05') + backup('L', 'Respaldo del log NotasLab05') + count(10) +
+      `IF (SELECT nota FROM NotasLab05.dbo.Calificacion WHERE calificacion_id=2)<>7.25 THROW 52005,N'Nota 2 no corregida',1;` };
+  if (s.includes('RESTORE LOG NotasLab05')) return {
+    out: out => /^\s*9 Lucía Morales\s+8\.75\s*$/m.test(out) && !out.includes('Andrés'),
+    sql: count(9) + `IF (SELECT state_desc FROM sys.databases WHERE name=N'NotasLab05')<>N'ONLINE' THROW 52002,N'Base no ONLINE',1;
+IF EXISTS(SELECT 1 FROM NotasLab05.dbo.Calificacion WHERE calificacion_id=10) THROW 52007,N'La nota 10 no debia recuperarse',1;
 IF (SELECT nota FROM NotasLab05.dbo.Calificacion WHERE calificacion_id=2)<>7.25 THROW 52008,N'La correccion de la nota 2 no se recupero',1;
-IF (SELECT MAX(calificacion_id) FROM NotasLab05.dbo.Calificacion)<>9 THROW 52009,N'Ids inesperados',1;
-IF (SELECT estudiante FROM NotasLab05.dbo.Calificacion WHERE calificacion_id=1)<>N'Ana Martínez' THROW 52010,N'Acentos alterados',1;` };
-  if (s.includes('DELETE FROM dbo.Calificacion;')) return { sql: count(0) };
-  if (s.trim() === 'SELECT COUNT(*) AS Calificaciones\nFROM dbo.Calificacion;\nGO') return { sql: count(9) };
-  if (s.includes('ALTER ROLE db_backupoperator')) return { sql: `USE NotasLab05; IF IS_ROLEMEMBER(N'db_backupoperator',N'usuarioRespaldo')<>1 THROW 52011,N'Usuario fuera del rol',1;` };
-  if (s.startsWith("EXECUTE AS USER = 'usuarioRespaldo'")) return { expectError: true,
-    out: out => out.includes('BACKUP DATABASE successfully processed') && /Msg 229,/.test(out) && !/Msg (?!229)\d+,/.test(out),
-    sql: backup('D', 'Respaldo del operador NotasLab05') + `IF (SELECT TOP (1) user_name FROM msdb.dbo.backupset WHERE name=N'Respaldo del operador NotasLab05' ORDER BY backup_set_id DESC)<>N'loginRespaldo' AND (SELECT TOP (1) user_name FROM msdb.dbo.backupset WHERE name=N'Respaldo del operador NotasLab05' ORDER BY backup_set_id DESC)<>N'usuarioRespaldo' THROW 52012,N'Respaldo no hecho por el operador',1;`,
-    revertCheck: true };
+IF (SELECT estudiante FROM NotasLab05.dbo.Calificacion WHERE calificacion_id=1)<>N'Ana Martínez' THROW 52010,N'Acentos alterados',1;
+IF (SELECT COUNT(*) FROM msdb.dbo.restorehistory WHERE destination_database_name=N'NotasLab05')<>3 THROW 52021,N'No se aplicaron tres restauraciones',1;` };
+  if (s.includes('DELETE FROM NotasLab05.dbo.Calificacion')) return { sql: count(0) };
   if (s.includes('dbo.sp_add_job\n')) return { sql: `IF NOT EXISTS(SELECT 1 FROM msdb.dbo.sysjobs j JOIN msdb.dbo.sysjobschedules js ON js.job_id=j.job_id JOIN msdb.dbo.sysjobservers sv ON sv.job_id=j.job_id WHERE j.name=N'Respaldo diario NotasLab05') THROW 52013,N'Job incompleto',1;
 IF NOT EXISTS(SELECT 1 FROM msdb.dbo.sysschedules WHERE name=N'Diario 10 p. m.' AND freq_type=4 AND freq_interval=1 AND active_start_time=220000) THROW 52014,N'Programacion incorrecta',1;` };
-  if (s.includes('sp_start_job')) return { sql: `DECLARE @i INT=0;
+  if (s.includes('sp_start_job')) return { out: has('started successfully'), sql: `DECLARE @i INT=0;
 WHILE @i<60 AND NOT EXISTS(SELECT 1 FROM msdb.dbo.sysjobhistory h JOIN msdb.dbo.sysjobs j ON j.job_id=h.job_id WHERE j.name=N'Respaldo diario NotasLab05' AND h.step_id=0)
 BEGIN WAITFOR DELAY '00:00:01'; SET @i+=1; END;
 IF NOT EXISTS(SELECT 1 FROM msdb.dbo.sysjobhistory h JOIN msdb.dbo.sysjobs j ON j.job_id=h.job_id WHERE j.name=N'Respaldo diario NotasLab05' AND h.step_id=0 AND h.run_status=1) THROW 52015,N'El job no termino con exito',1;
-PRINT N'G05_JOB_OK';` };
+IF NOT EXISTS(SELECT 1 FROM msdb.dbo.backupset bs JOIN msdb.dbo.backupmediafamily f ON f.media_set_id=bs.media_set_id WHERE f.physical_device_name LIKE N'%NotasLab05_job.bak' AND bs.compressed_backup_size<bs.backup_size) THROW 52016,N'El respaldo del job no esta comprimido',1;` };
   if (s.includes('msdb.dbo.sysjobhistory AS h')) return { out: has('Respaldo completo', '(Job outcome)') };
-  if (s.includes('compressed_backup_size')) return { sql: `IF NOT EXISTS(SELECT 1 FROM msdb.dbo.backupset bs JOIN msdb.dbo.backupmediafamily f ON f.media_set_id=bs.media_set_id WHERE bs.database_name=N'NotasLab05' AND f.physical_device_name LIKE N'%NotasLab05_job.bak' AND bs.compressed_backup_size<bs.backup_size) THROW 52016,N'El respaldo del job no esta comprimido',1;
-IF EXISTS(SELECT 1 FROM msdb.dbo.backupset bs JOIN msdb.dbo.backupmediafamily f ON f.media_set_id=bs.media_set_id WHERE bs.database_name=N'NotasLab05' AND f.physical_device_name NOT LIKE N'%NotasLab05_job.bak' AND bs.type='D' AND bs.compressed_backup_size<>bs.backup_size) THROW 52017,N'Un respaldo sin COMPRESSION aparece comprimido',1;` };
-  if (s.includes('LIMPIEZA OPCIONAL')) return { sql: `IF DB_ID(N'NotasLab05') IS NOT NULL OR SUSER_ID(N'loginRespaldo') IS NOT NULL THROW 52018,N'Quedaron objetos',1;
-IF EXISTS(SELECT 1 FROM msdb.dbo.sysjobs WHERE name=N'Respaldo diario NotasLab05') OR EXISTS(SELECT 1 FROM msdb.dbo.sysschedules WHERE name=N'Diario 10 p. m.') THROW 52019,N'Quedo el job',1;
-IF EXISTS(SELECT 1 FROM msdb.dbo.backupset WHERE database_name=N'NotasLab05') THROW 52020,N'Quedo historial',1;` };
   return {};
 }
 
 const pre = sql(`SET NOCOUNT ON;
-IF DB_ID(N'NotasLab05') IS NOT NULL OR SUSER_ID(N'loginRespaldo') IS NOT NULL OR EXISTS(SELECT 1 FROM msdb.dbo.sysjobs WHERE name=N'Respaldo diario NotasLab05')
+IF DB_ID(N'NotasLab05') IS NOT NULL OR EXISTS(SELECT 1 FROM msdb.dbo.sysjobs WHERE name=N'Respaldo diario NotasLab05')
   THROW 52000,N'Ya existen objetos de la guia; no se modifica una instalacion previa',1;
 GO`);
 if (pre.status !== 0) { console.error(pre.out); process.exit(1); }
@@ -101,11 +82,12 @@ records.forEach((r, i) => {
   const check = checksFor(r);
   let res;
   if (r.lang === 'sql') {
-    res = sql(`USE ${context};\nGO\n${r.code}`, { failOnError: !check.expectError });
+    // Cada bloque se envía en una sesión nueva con la base activa del bloque anterior, como en una pestaña de SSMS.
+    res = sql(`USE ${context};\nGO\n${r.code}`);
     const uses = [...r.code.matchAll(/^USE (\w+);/gm)];
     if (uses.length) context = uses[uses.length - 1][1];
   } else res = ps(r.code.trim().split('\n').join('; '));
-  let ok = check.expectError ? true : res.status === 0;
+  let ok = res.status === 0;
   if (ok && check.out) ok = check.out(res.out);
   if (ok && check.sql) {
     const c = sql(`SET NOCOUNT ON;\n${check.sql}\nGO`);
