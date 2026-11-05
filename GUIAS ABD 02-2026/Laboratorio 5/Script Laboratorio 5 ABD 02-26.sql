@@ -70,11 +70,9 @@ WITH INIT, NAME = 'Respaldo del log NotasLab05';
 -- Cambio posterior al último respaldo.
 INSERT INTO dbo.Calificacion (calificacion_id, estudiante, nota)
 VALUES (10, N'Andrés Guzmán', 7.50);
-
--- Comprueba que el respaldo completo esté completo y sea legible.
-RESTORE VERIFYONLY
-FROM DISK = '/backup/NotasLab05/NotasLab05_full.bak';
 GO
+
+-- [PowerShell] docker exec sqlserver-2025 ls -l /backup/NotasLab05
 
 USE master;
 GO
@@ -109,8 +107,13 @@ GO
 
 USE msdb;
 GO
+EXEC dbo.sp_add_operator
+     @name = N'operador1',
+     @email_address = N'operador1@notaslab05.local';
 EXEC dbo.sp_add_job
-     @job_name = N'Respaldo diario NotasLab05';
+     @job_name = N'Respaldo diario NotasLab05',
+     @notify_level_email = 2,
+     @notify_email_operator_name = N'operador1';
 EXEC dbo.sp_add_jobstep
      @job_name = N'Respaldo diario NotasLab05',
      @step_name = N'Respaldo completo',
@@ -144,6 +147,7 @@ GO
 -- EXEC msdb.dbo.sp_delete_job
 --      @job_name = N'Respaldo diario NotasLab05',
 --      @delete_unused_schedule = 1;
+-- EXEC msdb.dbo.sp_delete_operator @name = N'operador1';
 -- EXEC msdb.dbo.sp_delete_database_backuphistory
 --      @database_name = N'NotasLab05';
 -- GO

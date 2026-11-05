@@ -36,6 +36,7 @@ function checksFor(r) {
   const s = r.code;
   if (r.lang === 'powershell') {
     if (s.includes('mkdir -p /backup/NotasLab05')) return { out: has('mssql', '/backup/NotasLab05') };
+    if (s.includes('ls -l /backup/NotasLab05')) return { out: has('NotasLab05_full.bak', 'NotasLab05_diff.bak', 'NotasLab05_log.trn') };
     if (s.includes(' out /backup/NotasLab05/calificacion.dat')) return { out: has('9 rows copied') };
     if (s.includes(' in /backup/NotasLab05/calificacion.dat')) return { out: has('9 rows copied'), sql: count(9) };
     if (s.includes('rm -rf /backup/NotasLab05')) return { after: () => ps(`docker exec ${container} sh -c "test -e /backup/NotasLab05 && echo EXISTE || echo NOEXISTE"`).out.includes('NOEXISTE') };
@@ -43,10 +44,11 @@ function checksFor(r) {
   }
   if (s.includes('LIMPIEZA OPCIONAL')) return { sql: `IF DB_ID(N'NotasLab05') IS NOT NULL THROW 52018,N'Quedo la base',1;
 IF EXISTS(SELECT 1 FROM msdb.dbo.sysjobs WHERE name=N'Respaldo diario NotasLab05') OR EXISTS(SELECT 1 FROM msdb.dbo.sysschedules WHERE name=N'Diario 10 p. m.') THROW 52019,N'Quedo el job',1;
+IF EXISTS(SELECT 1 FROM msdb.dbo.sysoperators WHERE name=N'operador1') THROW 52023,N'Quedo el operador',1;
 IF EXISTS(SELECT 1 FROM msdb.dbo.backupset WHERE database_name=N'NotasLab05') THROW 52020,N'Quedo historial',1;` };
   if (s.includes('CREATE TABLE dbo.Calificacion')) return { sql: count(6) + `IF (SELECT recovery_model_desc FROM sys.databases WHERE name=N'NotasLab05')<>N'FULL' THROW 52004,N'Modelo no FULL',1;` };
   if (s.includes('BACKUP LOG NotasLab05')) return {
-    out: has('BACKUP DATABASE successfully processed', 'BACKUP DATABASE WITH DIFFERENTIAL successfully processed', 'BACKUP LOG successfully processed', 'The backup set on file 1 is valid.'),
+    out: has('BACKUP DATABASE successfully processed', 'BACKUP DATABASE WITH DIFFERENTIAL successfully processed', 'BACKUP LOG successfully processed'),
     sql: backup('D', 'Respaldo completo NotasLab05') + backup('I', 'Respaldo diferencial NotasLab05') + backup('L', 'Respaldo del log NotasLab05') + count(10) +
       `IF (SELECT nota FROM NotasLab05.dbo.Calificacion WHERE calificacion_id=2)<>7.25 THROW 52005,N'Nota 2 no corregida',1;` };
   if (s.includes('RESTORE LOG NotasLab05')) return {
@@ -58,7 +60,8 @@ IF (SELECT estudiante FROM NotasLab05.dbo.Calificacion WHERE calificacion_id=1)<
 IF (SELECT COUNT(*) FROM msdb.dbo.restorehistory WHERE destination_database_name=N'NotasLab05')<>3 THROW 52021,N'No se aplicaron tres restauraciones',1;` };
   if (s.includes('DELETE FROM NotasLab05.dbo.Calificacion')) return { sql: count(0) };
   if (s.includes('dbo.sp_add_job\n')) return { sql: `IF NOT EXISTS(SELECT 1 FROM msdb.dbo.sysjobs j JOIN msdb.dbo.sysjobschedules js ON js.job_id=j.job_id JOIN msdb.dbo.sysjobservers sv ON sv.job_id=j.job_id WHERE j.name=N'Respaldo diario NotasLab05') THROW 52013,N'Job incompleto',1;
-IF NOT EXISTS(SELECT 1 FROM msdb.dbo.sysschedules WHERE name=N'Diario 10 p. m.' AND freq_type=4 AND freq_interval=1 AND active_start_time=220000) THROW 52014,N'Programacion incorrecta',1;` };
+IF NOT EXISTS(SELECT 1 FROM msdb.dbo.sysschedules WHERE name=N'Diario 10 p. m.' AND freq_type=4 AND freq_interval=1 AND active_start_time=220000) THROW 52014,N'Programacion incorrecta',1;
+IF NOT EXISTS(SELECT 1 FROM msdb.dbo.sysjobs j JOIN msdb.dbo.sysoperators o ON o.id=j.notify_email_operator_id WHERE j.name=N'Respaldo diario NotasLab05' AND j.notify_level_email=2 AND o.name=N'operador1' AND o.email_address=N'operador1@notaslab05.local') THROW 52022,N'Notificacion al operador incorrecta',1;` };
   if (s.includes('sp_start_job')) return { out: has('started successfully'), sql: `DECLARE @i INT=0;
 WHILE @i<60 AND NOT EXISTS(SELECT 1 FROM msdb.dbo.sysjobhistory h JOIN msdb.dbo.sysjobs j ON j.job_id=h.job_id WHERE j.name=N'Respaldo diario NotasLab05' AND h.step_id=0)
 BEGIN WAITFOR DELAY '00:00:01'; SET @i+=1; END;
@@ -69,7 +72,7 @@ IF NOT EXISTS(SELECT 1 FROM msdb.dbo.backupset bs JOIN msdb.dbo.backupmediafamil
 }
 
 const pre = sql(`SET NOCOUNT ON;
-IF DB_ID(N'NotasLab05') IS NOT NULL OR EXISTS(SELECT 1 FROM msdb.dbo.sysjobs WHERE name=N'Respaldo diario NotasLab05')
+IF DB_ID(N'NotasLab05') IS NOT NULL OR EXISTS(SELECT 1 FROM msdb.dbo.sysjobs WHERE name=N'Respaldo diario NotasLab05') OR EXISTS(SELECT 1 FROM msdb.dbo.sysoperators WHERE name=N'operador1')
   THROW 52000,N'Ya existen objetos de la guia; no se modifica una instalacion previa',1;
 GO`);
 if (pre.status !== 0) { console.error(pre.out); process.exit(1); }
