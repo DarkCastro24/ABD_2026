@@ -8,19 +8,19 @@
 -- La limpieza final está comentada.
 
 -- ========================================================================
--- Introducción y forma de trabajo
+-- Introducción
 -- ========================================================================
 
 -- ========================================================================
--- Objetivos de recuperación
+-- RPO y RTO
 -- ========================================================================
 
 -- ========================================================================
--- Tipos de respaldo y recorrido del ejemplo
+-- Tipos de respaldo
 -- ========================================================================
 
 -- ========================================================================
--- Preparar el entorno y crear seis calificaciones
+-- Preparar el entorno
 -- ========================================================================
 
 -- Comprobar el contenedor
@@ -61,7 +61,7 @@ INSERT INTO dbo.Calificacion VALUES
 SELECT * FROM dbo.Calificacion ORDER BY calificacion_id;
 
 -- ========================================================================
--- Crear los tres respaldos
+-- Crear respaldos
 -- ========================================================================
 
 -- Tomar el respaldo completo
@@ -127,7 +127,7 @@ RESTORE VERIFYONLY FROM DISK = '/backup/NotasLab05/NotasLab05_diff.bak' WITH CHE
 RESTORE VERIFYONLY FROM DISK = '/backup/NotasLab05/NotasLab05_log.trn' WITH CHECKSUM;
 
 -- ========================================================================
--- Simular la falla y recuperar la base
+-- Restaurar la base
 -- ========================================================================
 
 -- Simular la pérdida de la base
@@ -172,7 +172,7 @@ SELECT calificacion_id, estudiante, nota
 FROM dbo.Calificacion ORDER BY calificacion_id;
 
 -- ========================================================================
--- Exportar e importar datos
+-- Respaldos lógicos
 -- ========================================================================
 
 -- Exportar las nueve calificaciones
@@ -211,7 +211,7 @@ FROM dbo.Calificacion;
 -- [PowerShell] docker exec sqlserver-2025 cat /backup/NotasLab05/notas.csv
 
 -- ========================================================================
--- Programar y comprobar un respaldo automático
+-- Respaldo automático
 -- ========================================================================
 
 -- Comprobar Agent y el horario del servidor
@@ -271,7 +271,7 @@ WHERE j.name = N'Respaldo diario NotasLab05' AND h.step_id = 0
 ORDER BY h.instance_id DESC;
 
 -- ========================================================================
--- Asociar notificaciones y comprobar sus requisitos
+-- Notificaciones
 -- ========================================================================
 
 -- Consultar los perfiles de correo
@@ -297,7 +297,7 @@ JOIN dbo.sysoperators AS o ON o.id = j.notify_email_operator_id
 WHERE j.name = N'Respaldo diario NotasLab05';
 
 -- ========================================================================
--- Cierre y limpieza opcional
+-- Limpieza
 -- ========================================================================
 
 -- Eliminar los objetos del ejemplo
@@ -321,5 +321,5 @@ WHERE j.name = N'Respaldo diario NotasLab05';
 -- [PowerShell] docker exec sqlserver-2025 rmdir /backup/NotasLab05
 
 -- ========================================================================
--- Créditos y referencias
+-- Créditos
 -- ========================================================================
