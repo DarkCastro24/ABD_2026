@@ -23,11 +23,6 @@
 -- Preparar el entorno
 -- ========================================================================
 
--- Comprobar el contenedor
--- Lee la explicación y la comprobación de esta actividad en la guía.
-
--- [PowerShell] docker ps --filter "name=sqlserver-2025" --format "table {{.Names}}	{{.Status}}"
-
 -- Crear la carpeta de respaldos
 -- Lee la explicación y la comprobación de esta actividad en la guía.
 
