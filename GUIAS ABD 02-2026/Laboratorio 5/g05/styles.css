@@ -13,17 +13,9 @@ google-codelab-step .learning-tip{display:block;margin:22px 0;padding:15px 18px;
 google-codelab-step .learning-tip p{margin:0;line-height:1.65}
 google-codelab-step figure{margin:26px 0 30px}
 google-codelab-step figure img{display:block;width:100%;height:auto;border:1px solid #e1e7ee;border-radius:12px;background:#f8fafc}
-.diagram-image-button{display:block;width:100%;padding:0;border:0;background:transparent;cursor:zoom-in}
-.diagram-image-button:focus-visible{outline:3px solid #214b80;outline-offset:4px;border-radius:12px}
 google-codelab-step figure.license-badge{margin:20px 0}
 google-codelab-step .license-badge img{width:88px;max-width:100%;height:auto;border:0;border-radius:0;background:transparent}
 google-codelab-step figcaption{font-size:13px;line-height:1.55;color:#5c6e80;margin:9px 4px 0}
-.zoom-btn{background:transparent;border:1px solid #b9cbe0;border-radius:5px;padding:5px 10px;color:#214b80;font-size:12px;cursor:pointer;margin-top:9px}
-#diagram-viewer{width:min(1100px,94vw);max-width:94vw;padding:16px;border:1px solid #b9cbe0;border-radius:12px;background:#f8fafc}
-#diagram-viewer::backdrop{background:#172e49bb}
-#diagram-viewer form{display:flex;justify-content:flex-end;margin-bottom:12px}
-#diagram-viewer .image-zoom{overflow:auto;max-height:78vh}
-#diagram-viewer img{display:block;min-width:900px;width:100%;height:auto}
 .code-container{margin:22px 0;background:#17283a;border-radius:8px;overflow:hidden;border:1px solid #213e58}
 .code-toolbar{display:flex;justify-content:space-between;align-items:center;padding:8px 13px;background:#24425e;color:#e8eff7;font-size:12px;font-weight:600;letter-spacing:.06em}
 .copy-btn{background:#f3f6fc;border:0;border-radius:4px;color:#24425e;padding:6px 10px;cursor:pointer;font-size:12px;letter-spacing:normal}
@@ -47,7 +39,7 @@ google-codelab #drawer ol li[selected] a{border-color:#214b80;background:#eaf1fc
   google-codelab-step figure{margin:20px -5px}
 }
 @media print{
-  google-codelab #drawer,google-codelab #codelab-title,google-codelab #controls,.code-toolbar,.zoom-btn{display:none!important}
+  google-codelab #drawer,google-codelab #codelab-title,google-codelab #controls,.code-toolbar{display:none!important}
   google-codelab,google-codelab #main,google-codelab #steps{display:block!important;height:auto!important;overflow:visible!important;padding:0!important}
   google-codelab google-codelab-step{display:block!important;position:static!important;height:auto!important;overflow:visible!important;break-before:page;padding:0!important;transform:none!important}
   google-codelab-step .instructions{box-shadow:none!important;margin:0!important}
@@ -55,3 +47,5 @@ google-codelab #drawer ol li[selected] a{border-color:#214b80;background:#eaf1fc
   google-codelab-step .code-container pre{white-space:pre-wrap;color:#17283a;background:#f3f6fa}
   google-codelab-step .code-container code{color:#17283a}
 }
+
+google-codelab-step figure.expected-capture img{border-radius:0;border:0;background:transparent}

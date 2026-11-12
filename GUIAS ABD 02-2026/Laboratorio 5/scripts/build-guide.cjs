@@ -15,12 +15,12 @@ async function main() {
   const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   const sections = [];
   const sql = [
-    '-- Laboratorio 5 | Ciclo 02-2026 | Versión 1',
+    '-- Laboratorio 5 | Ciclo 02-2026 | Versión 2',
     '-- Autor: Diego Eduardo Castro Quintanilla',
     '-- Fuente: G05.md. Regenerado por scripts/build-guide.cjs.',
-    '-- Ejemplos informativos: ejecuta por bloques en el orden de la guía sobre una base nueva.',
+    '-- Ejecuta SOLO el bloque del paso actual, en el orden de la guía. No ejecutes todo el archivo.',
     '-- Los comandos marcados con [PowerShell] se ejecutan en PowerShell, no en SSMS.',
-    '-- Antes de empezar, crea la carpeta /backup/NotasLab05 en el contenedor (sección Preparar el entorno).',
+    '-- Antes de empezar, prepara /backup/NotasLab05 y comprueba que NotasLab05 no exista.',
     '-- La secuencia incluye un DROP DATABASE para simular la falla: no la ejecutes sobre una base real.',
     '-- La limpieza final está comentada.',
     ''
@@ -40,17 +40,16 @@ async function main() {
       if (path.basename(absolute).toLowerCase() === 'license.jpg') {
         return `<figure class="license-badge"><img src="${data}" alt="${alt}" width="88" height="31" loading="lazy"/></figure>`;
       }
-      if (path.basename(absolute) === 'modelo-relacional-ssms.svg') {
-        return `<figure><button type="button" class="diagram-image-button" onclick="openDiagram(this)" aria-label="Ampliar diagrama relacional"><img src="${data}" alt="${alt}" loading="lazy"/></button></figure>`;
-      }
-      const zoom = src.endsWith('.svg') ? '<button type="button" class="zoom-btn" onclick="openDiagram(this)">Ampliar diagrama</button>' : '';
-      return `<figure><img src="${data}" alt="${alt}" loading="lazy"/>${zoom}</figure>`;
+      return `<figure${src.includes('/capturas/')?' class="expected-capture"':''}><img src="${data}" alt="${alt}" loading="lazy"/></figure>`;
     });
     html = html.replace(/href="g05\//g, 'href="');
     html = html.replace(/<table>/g, '<div class="table-scroll"><table>').replace(/<\/table>/g, '</table></div>');
     sections.push({ label, duration: Number(duration), html });
     sql.push(`-- ${'='.repeat(72)}`, `-- ${label}`, `-- ${'='.repeat(72)}`, '');
     for (const code of body.matchAll(/```sql\n([\s\S]*?)```|<!-- sql-(include|external): ([^>\n]+) -->|```powershell\n([\s\S]*?)```/g)) {
+      const previous = body.slice(0,code.index);
+      const activity = [...previous.matchAll(/^### (.+)$/gm)].pop();
+      if(activity) sql.push(`-- ${activity[1]}`, '-- Lee la explicación y la comprobación de esta actividad en la guía.', '');
       let text;
       if (code[4] !== undefined) {
         sql.push(...code[4].trimEnd().split('\n').map(l => `-- [PowerShell] ${l}`), '');
@@ -81,7 +80,7 @@ async function main() {
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <meta name="theme-color" content="#214b80"/>
 <meta name="author" content="Diego Eduardo Castro Quintanilla"/>
-<meta name="description" content="Laboratorio 5, versión 1. Copias de seguridad y restauración en SQL Server con NotasLab05, basadas en el material de clase."/>
+<meta name="description" content="Laboratorio 5. Copias de seguridad y restauración paso a paso, con explicación de comandos y resultados."/>
 <title>${esc(title)}</title>
 <!-- Archivo generado desde G05.md. Recursos incrustados para lectura sin conexión. -->
 <style>${fonts}\n${asset('codelab-elements.css')}\n${styles}</style>
@@ -94,7 +93,6 @@ try { localStorage.getItem('g05'); } catch (e) {
 <google-codelab id="g05" title="${esc(title)}" environment="web" category="databases">
 ${sections.map(s => `<google-codelab-step label="${esc(s.label.replace(/^\d+\.\s*/,''))}" duration="${s.duration}">\n${s.html}</google-codelab-step>`).join('\n')}
 </google-codelab>
-<dialog id="diagram-viewer" aria-label="Diagrama ampliado"><form method="dialog"><button class="copy-btn">Cerrar diagrama</button></form><div class="image-zoom"><img alt=""/></div></dialog>
 <script>
 document.querySelector('google-codelab').addEventListener('google-codelab-ready',()=>{
   for(const [id,label] of [['previous-step','Anterior'],['next-step','Siguiente'],['done','Finalizar']]){
@@ -102,13 +100,6 @@ document.querySelector('google-codelab').addEventListener('google-codelab-ready'
     if(button){button.textContent=label;button.title=label;}
   }
 });
-function openDiagram(button) {
-  const original=button.closest('figure').querySelector('img');
-  const dialog=document.getElementById('diagram-viewer');
-  dialog.querySelector('img').src=original.src;
-  dialog.querySelector('img').alt=original.alt;
-  dialog.showModal();
-}
 async function copyCode(button) {
   const code = button.closest('.code-container').querySelector('code').textContent;
   try {
@@ -131,7 +122,7 @@ async function copyCode(button) {
 </body></html>\n`;
   const meta = {
     environment: 'web', format: 'html', prefix: 'https://storage.googleapis.com',
-    updated: '2026-11-04T12:00:00-06:00', id: 'g05',
+    updated: '2026-11-06T12:00:00-06:00', id: 'g05',
     duration: sections.reduce((a,s)=>a+s.duration,0), title,
     summary: source.match(/^summary: (.+)$/m)[1], source: './G05.md', theme: '',
     status: ['published'], category: ['databases'], tags: ['databases'], url: 'g05'

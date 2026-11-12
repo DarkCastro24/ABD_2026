@@ -1,0 +1,597 @@
+[
+  {
+    "id": "01",
+    "title": "Comprobar el contenedor",
+    "lang": "powershell",
+    "code": "docker ps --filter \"name=sqlserver-2025\" --format \"table {{.Names}}\t{{.Status}}\"",
+    "output": [
+      "NAMES              STATUS",
+      "sqlserver-2025     Up 20 minutes"
+    ],
+    "columns": null,
+    "rows": null,
+    "note": "El tiempo de actividad es ilustrativo."
+  },
+  {
+    "id": "02",
+    "title": "Crear la carpeta de respaldos",
+    "lang": "powershell",
+    "code": "docker exec sqlserver-2025 mkdir -p /backup/NotasLab05\ndocker exec sqlserver-2025 ls -d /backup/NotasLab05",
+    "output": [
+      "/backup/NotasLab05"
+    ],
+    "columns": null,
+    "rows": null,
+    "note": null
+  },
+  {
+    "id": "03",
+    "title": "Crear la base en FULL",
+    "lang": "sql",
+    "code": "USE master;\nIF DB_ID(N'NotasLab05') IS NOT NULL\n    THROW 50001, N'NotasLab05 ya existe. Revisa el entorno antes de continuar.', 1;\nEXEC(N'CREATE DATABASE NotasLab05');\nEXEC(N'ALTER DATABASE NotasLab05 SET RECOVERY FULL');\nSELECT name, recovery_model_desc, state_desc\nFROM sys.databases WHERE name = N'NotasLab05';",
+    "output": [],
+    "columns": [
+      "name",
+      "recovery_model_desc",
+      "state_desc"
+    ],
+    "rows": [
+      [
+        "NotasLab05",
+        "FULL",
+        "ONLINE"
+      ]
+    ],
+    "note": null
+  },
+  {
+    "id": "04",
+    "title": "Crear la tabla y los datos iniciales",
+    "lang": "sql",
+    "code": "USE NotasLab05;\nCREATE TABLE dbo.Calificacion (\n    calificacion_id INT PRIMARY KEY,\n    estudiante NVARCHAR(60) NOT NULL,\n    nota DECIMAL(4,2) NOT NULL\n);\nINSERT INTO dbo.Calificacion VALUES\n(1, N'Ana Martínez', 8.50), (2, N'Luis Hernández', 6.75),\n(3, N'María López', 9.25), (4, N'Carlos Rivas', 7.00),\n(5, N'Sofía Pérez', 8.00), (6, N'Jorge Ramírez', 5.50);\nSELECT * FROM dbo.Calificacion ORDER BY calificacion_id;",
+    "output": [
+      "(6 rows affected)"
+    ],
+    "columns": [
+      "calificacion_id",
+      "estudiante",
+      "nota"
+    ],
+    "rows": [
+      [
+        1,
+        "Ana Martínez",
+        "8.50"
+      ],
+      [
+        2,
+        "Luis Hernández",
+        "6.75"
+      ],
+      [
+        3,
+        "María López",
+        "9.25"
+      ],
+      [
+        4,
+        "Carlos Rivas",
+        "7.00"
+      ],
+      [
+        5,
+        "Sofía Pérez",
+        "8.00"
+      ],
+      [
+        6,
+        "Jorge Ramírez",
+        "5.50"
+      ]
+    ],
+    "note": null
+  },
+  {
+    "id": "05",
+    "title": "Tomar el respaldo completo",
+    "lang": "sql",
+    "code": "USE master;\nBACKUP DATABASE NotasLab05\nTO DISK = '/backup/NotasLab05/NotasLab05_full.bak'\nWITH INIT, CHECKSUM, NAME = 'Completo NotasLab05';",
+    "output": [
+      "BACKUP DATABASE successfully processed ..."
+    ],
+    "columns": null,
+    "rows": null,
+    "note": "Se omiten páginas procesadas y duración, que dependen del equipo."
+  },
+  {
+    "id": "06",
+    "title": "Agregar las calificaciones 7 y 8",
+    "lang": "sql",
+    "code": "USE NotasLab05;\nINSERT INTO dbo.Calificacion VALUES\n(7, N'Valeria Castillo', 9.00), (8, N'Mario Flores', 6.25);\nSELECT COUNT(*) AS total_filas FROM dbo.Calificacion;",
+    "output": [
+      "(2 rows affected)"
+    ],
+    "columns": [
+      "total_filas"
+    ],
+    "rows": [
+      [
+        8
+      ]
+    ],
+    "note": null
+  },
+  {
+    "id": "07",
+    "title": "Tomar el respaldo diferencial",
+    "lang": "sql",
+    "code": "USE master;\nBACKUP DATABASE NotasLab05\nTO DISK = '/backup/NotasLab05/NotasLab05_diff.bak'\nWITH DIFFERENTIAL, INIT, CHECKSUM, NAME = 'Diferencial NotasLab05';",
+    "output": [
+      "BACKUP DATABASE WITH DIFFERENTIAL successfully processed ..."
+    ],
+    "columns": null,
+    "rows": null,
+    "note": "Mensaje del motor resumido; no se fijan páginas ni tiempos."
+  },
+  {
+    "id": "08",
+    "title": "Agregar la calificación 9 y corregir una nota",
+    "lang": "sql",
+    "code": "USE NotasLab05;\nINSERT INTO dbo.Calificacion VALUES (9, N'Lucía Morales', 8.75);\nUPDATE dbo.Calificacion SET nota = 7.25 WHERE calificacion_id = 2;\nSELECT COUNT(*) AS total_filas,\n       (SELECT nota FROM dbo.Calificacion WHERE calificacion_id = 2) AS nota_2\nFROM dbo.Calificacion;",
+    "output": [
+      "(1 row affected)",
+      "(1 row affected)"
+    ],
+    "columns": [
+      "total_filas",
+      "nota_2"
+    ],
+    "rows": [
+      [
+        9,
+        "7.25"
+      ]
+    ],
+    "note": null
+  },
+  {
+    "id": "09",
+    "title": "Respaldar el registro de transacciones",
+    "lang": "sql",
+    "code": "USE master;\nBACKUP LOG NotasLab05\nTO DISK = '/backup/NotasLab05/NotasLab05_log.trn'\nWITH INIT, CHECKSUM, NAME = 'Log NotasLab05';",
+    "output": [
+      "BACKUP LOG successfully processed ..."
+    ],
+    "columns": null,
+    "rows": null,
+    "note": "Mensaje del motor resumido; no se fijan páginas ni tiempos."
+  },
+  {
+    "id": "10",
+    "title": "Agregar un dato que quedará sin respaldo",
+    "lang": "sql",
+    "code": "USE NotasLab05;\nINSERT INTO dbo.Calificacion VALUES (10, N'Andrés Guzmán', 7.50);\nSELECT COUNT(*) AS total_filas FROM dbo.Calificacion;",
+    "output": [
+      "(1 row affected)"
+    ],
+    "columns": [
+      "total_filas"
+    ],
+    "rows": [
+      [
+        10
+      ]
+    ],
+    "note": null
+  },
+  {
+    "id": "11",
+    "title": "Revisar los archivos creados",
+    "lang": "powershell",
+    "code": "docker exec sqlserver-2025 ls -1 /backup/NotasLab05",
+    "output": [
+      "NotasLab05_diff.bak",
+      "NotasLab05_full.bak",
+      "NotasLab05_log.trn"
+    ],
+    "columns": null,
+    "rows": null,
+    "note": null
+  },
+  {
+    "id": "12",
+    "title": "Verificar que los respaldos son legibles",
+    "lang": "sql",
+    "code": "USE master;\nRESTORE VERIFYONLY FROM DISK = '/backup/NotasLab05/NotasLab05_full.bak' WITH CHECKSUM;\nRESTORE VERIFYONLY FROM DISK = '/backup/NotasLab05/NotasLab05_diff.bak' WITH CHECKSUM;\nRESTORE VERIFYONLY FROM DISK = '/backup/NotasLab05/NotasLab05_log.trn' WITH CHECKSUM;",
+    "output": [
+      "The backup set on file 1 is valid.",
+      "The backup set on file 1 is valid.",
+      "The backup set on file 1 is valid."
+    ],
+    "columns": null,
+    "rows": null,
+    "note": null
+  },
+  {
+    "id": "13",
+    "title": "Simular la pérdida de la base",
+    "lang": "sql",
+    "code": "USE master;\nDROP DATABASE NotasLab05;\nSELECT DB_ID(N'NotasLab05') AS base_existente;",
+    "output": [],
+    "columns": [
+      "base_existente"
+    ],
+    "rows": [
+      [
+        "NULL"
+      ]
+    ],
+    "note": null
+  },
+  {
+    "id": "14",
+    "title": "Restaurar el completo",
+    "lang": "sql",
+    "code": "USE master;\nRESTORE DATABASE NotasLab05\nFROM DISK = '/backup/NotasLab05/NotasLab05_full.bak'\nWITH NORECOVERY;\nSELECT name, state_desc FROM sys.databases WHERE name = N'NotasLab05';",
+    "output": [
+      "RESTORE DATABASE successfully processed ..."
+    ],
+    "columns": [
+      "name",
+      "state_desc"
+    ],
+    "rows": [
+      [
+        "NotasLab05",
+        "RESTORING"
+      ]
+    ],
+    "note": "Mensaje del motor resumido; la cuadrícula muestra el estado esperado."
+  },
+  {
+    "id": "15",
+    "title": "Restaurar el diferencial",
+    "lang": "sql",
+    "code": "USE master;\nRESTORE DATABASE NotasLab05\nFROM DISK = '/backup/NotasLab05/NotasLab05_diff.bak'\nWITH NORECOVERY;\nSELECT name, state_desc FROM sys.databases WHERE name = N'NotasLab05';",
+    "output": [
+      "RESTORE DATABASE successfully processed ..."
+    ],
+    "columns": [
+      "name",
+      "state_desc"
+    ],
+    "rows": [
+      [
+        "NotasLab05",
+        "RESTORING"
+      ]
+    ],
+    "note": "Mensaje del motor resumido; la cuadrícula muestra el estado esperado."
+  },
+  {
+    "id": "16",
+    "title": "Restaurar el log",
+    "lang": "sql",
+    "code": "USE master;\nRESTORE LOG NotasLab05\nFROM DISK = '/backup/NotasLab05/NotasLab05_log.trn'\nWITH RECOVERY;\nSELECT name, state_desc FROM sys.databases WHERE name = N'NotasLab05';",
+    "output": [
+      "RESTORE LOG successfully processed ..."
+    ],
+    "columns": [
+      "name",
+      "state_desc"
+    ],
+    "rows": [
+      [
+        "NotasLab05",
+        "ONLINE"
+      ]
+    ],
+    "note": "Mensaje del motor resumido; la cuadrícula muestra el estado esperado."
+  },
+  {
+    "id": "17",
+    "title": "Comprobar los datos recuperados",
+    "lang": "sql",
+    "code": "USE NotasLab05;\nSELECT calificacion_id, estudiante, nota\nFROM dbo.Calificacion ORDER BY calificacion_id;",
+    "output": [],
+    "columns": [
+      "calificacion_id",
+      "estudiante",
+      "nota"
+    ],
+    "rows": [
+      [
+        1,
+        "Ana Martínez",
+        "8.50"
+      ],
+      [
+        2,
+        "Luis Hernández",
+        "7.25"
+      ],
+      [
+        3,
+        "María López",
+        "9.25"
+      ],
+      [
+        4,
+        "Carlos Rivas",
+        "7.00"
+      ],
+      [
+        5,
+        "Sofía Pérez",
+        "8.00"
+      ],
+      [
+        6,
+        "Jorge Ramírez",
+        "5.50"
+      ],
+      [
+        7,
+        "Valeria Castillo",
+        "9.00"
+      ],
+      [
+        8,
+        "Mario Flores",
+        "6.25"
+      ],
+      [
+        9,
+        "Lucía Morales",
+        "8.75"
+      ]
+    ],
+    "note": null
+  },
+  {
+    "id": "18",
+    "title": "Exportar las nueve calificaciones",
+    "lang": "powershell",
+    "code": "docker exec -it sqlserver-2025 /opt/mssql-tools18/bin/bcp NotasLab05.dbo.Calificacion out /backup/NotasLab05/calificacion.dat -n -S localhost -U sa -u",
+    "output": [
+      "Password:",
+      "Starting copy...",
+      "9 rows copied."
+    ],
+    "columns": null,
+    "rows": null,
+    "note": "La contraseña no se representa. Se omiten estadísticas de rendimiento."
+  },
+  {
+    "id": "19",
+    "title": "Vaciar la tabla de práctica",
+    "lang": "sql",
+    "code": "USE NotasLab05;\nDELETE FROM dbo.Calificacion;\nSELECT COUNT(*) AS total_filas FROM dbo.Calificacion;",
+    "output": [
+      "(9 rows affected)"
+    ],
+    "columns": [
+      "total_filas"
+    ],
+    "rows": [
+      [
+        0
+      ]
+    ],
+    "note": null
+  },
+  {
+    "id": "20",
+    "title": "Importar las calificaciones",
+    "lang": "powershell",
+    "code": "docker exec -it sqlserver-2025 /opt/mssql-tools18/bin/bcp NotasLab05.dbo.Calificacion in /backup/NotasLab05/calificacion.dat -n -S localhost -U sa -u",
+    "output": [
+      "Password:",
+      "Starting copy...",
+      "9 rows copied."
+    ],
+    "columns": null,
+    "rows": null,
+    "note": "La contraseña no se representa. Se omiten estadísticas de rendimiento."
+  },
+  {
+    "id": "21",
+    "title": "Comprobar la tabla importada",
+    "lang": "sql",
+    "code": "USE NotasLab05;\nSELECT COUNT(*) AS total_filas,\n       (SELECT nota FROM dbo.Calificacion WHERE calificacion_id = 2) AS nota_2\nFROM dbo.Calificacion;",
+    "output": [],
+    "columns": [
+      "total_filas",
+      "nota_2"
+    ],
+    "rows": [
+      [
+        9,
+        "7.25"
+      ]
+    ],
+    "note": null
+  },
+  {
+    "id": "22",
+    "title": "Exportar una consulta con sqlcmd",
+    "lang": "powershell",
+    "code": "docker exec -it sqlserver-2025 /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -C -d NotasLab05 -Q \"SET NOCOUNT ON; SELECT calificacion_id, nota FROM dbo.Calificacion ORDER BY calificacion_id;\" -s \",\" -W -h -1 -o /backup/NotasLab05/notas.csv",
+    "output": [
+      "Password:"
+    ],
+    "columns": null,
+    "rows": null,
+    "note": "Si la autenticación ya está configurada, puede no solicitar contraseña."
+  },
+  {
+    "id": "23",
+    "title": "Leer el archivo exportado",
+    "lang": "powershell",
+    "code": "docker exec sqlserver-2025 cat /backup/NotasLab05/notas.csv",
+    "output": [
+      "1,8.50",
+      "2,7.25",
+      "3,9.25",
+      "4,7.00",
+      "5,8.00",
+      "6,5.50",
+      "7,9.00",
+      "8,6.25",
+      "9,8.75"
+    ],
+    "columns": null,
+    "rows": null,
+    "note": null
+  },
+  {
+    "id": "24",
+    "title": "Comprobar Agent y el horario del servidor",
+    "lang": "sql",
+    "code": "USE master;\nSELECT servicename, status_desc,\n       DATEPART(TZOFFSET, SYSDATETIMEOFFSET()) AS desfase_utc_minutos\nFROM sys.dm_server_services\nWHERE servicename LIKE N'SQL Server Agent%';",
+    "output": [],
+    "columns": [
+      "servicename",
+      "status_desc",
+      "desfase_utc_minutos"
+    ],
+    "rows": [
+      [
+        "SQL Server Agent (MSSQLSERVER)",
+        "Running",
+        0
+      ]
+    ],
+    "note": "El nombre del servicio puede variar según la instancia."
+  },
+  {
+    "id": "25",
+    "title": "Crear el trabajo y su acción",
+    "lang": "sql",
+    "code": "USE msdb;\nIF EXISTS (SELECT 1 FROM dbo.sysjobs WHERE name = N'Respaldo diario NotasLab05')\n    THROW 50002, N'El job ya existe. No lo crees otra vez.', 1;\nEXEC dbo.sp_add_job @job_name = N'Respaldo diario NotasLab05';\nEXEC dbo.sp_add_jobstep\n    @job_name = N'Respaldo diario NotasLab05',\n    @step_name = N'Respaldo completo',\n    @subsystem = N'TSQL', @database_name = N'master',\n    @command = N'BACKUP DATABASE NotasLab05\nTO DISK = ''/backup/NotasLab05/NotasLab05_job.bak''\nWITH INIT, CHECKSUM, COMPRESSION;';\nEXEC dbo.sp_add_jobserver @job_name = N'Respaldo diario NotasLab05';\nSELECT name, enabled FROM dbo.sysjobs WHERE name = N'Respaldo diario NotasLab05';",
+    "output": [],
+    "columns": [
+      "name",
+      "enabled"
+    ],
+    "rows": [
+      [
+        "Respaldo diario NotasLab05",
+        1
+      ]
+    ],
+    "note": null
+  },
+  {
+    "id": "26",
+    "title": "Asignar la programación diaria",
+    "lang": "sql",
+    "code": "USE msdb;\nEXEC dbo.sp_add_schedule\n    @schedule_name = N'NotasLab05_diario_22h_SV',\n    @freq_type = 4, @freq_interval = 1,\n    @active_start_time = 040000;\nEXEC dbo.sp_attach_schedule\n    @job_name = N'Respaldo diario NotasLab05',\n    @schedule_name = N'NotasLab05_diario_22h_SV';\nSELECT name, freq_type, freq_interval, active_start_time\nFROM dbo.sysschedules WHERE name = N'NotasLab05_diario_22h_SV';",
+    "output": [],
+    "columns": [
+      "name",
+      "freq_type",
+      "freq_interval",
+      "active_start_time"
+    ],
+    "rows": [
+      [
+        "NotasLab05_diario_22h_SV",
+        4,
+        1,
+        40000
+      ]
+    ],
+    "note": null
+  },
+  {
+    "id": "27",
+    "title": "Ejecutar el job ahora",
+    "lang": "sql",
+    "code": "EXEC msdb.dbo.sp_start_job @job_name = N'Respaldo diario NotasLab05';",
+    "output": [
+      "Job 'Respaldo diario NotasLab05' started successfully."
+    ],
+    "columns": null,
+    "rows": null,
+    "note": null
+  },
+  {
+    "id": "28",
+    "title": "Comprobar el resultado del job",
+    "lang": "sql",
+    "code": "SELECT TOP (1) j.name AS trabajo, h.run_status,\n       CASE h.run_status WHEN 1 THEN N'Correcto'\n            WHEN 0 THEN N'Falló' ELSE N'Revisar historial' END AS resultado\nFROM msdb.dbo.sysjobhistory AS h\nJOIN msdb.dbo.sysjobs AS j ON j.job_id = h.job_id\nWHERE j.name = N'Respaldo diario NotasLab05' AND h.step_id = 0\nORDER BY h.instance_id DESC;",
+    "output": [],
+    "columns": [
+      "trabajo",
+      "run_status",
+      "resultado"
+    ],
+    "rows": [
+      [
+        "Respaldo diario NotasLab05",
+        1,
+        "Correcto"
+      ]
+    ],
+    "note": null
+  },
+  {
+    "id": "29",
+    "title": "Consultar los perfiles de correo",
+    "lang": "sql",
+    "code": "SELECT name AS perfil FROM msdb.dbo.sysmail_profile ORDER BY name;",
+    "output": [],
+    "columns": [
+      "perfil"
+    ],
+    "rows": [],
+    "note": "Escenario ilustrado: ningún perfil configurado. Tu instancia puede mostrar perfiles existentes."
+  },
+  {
+    "id": "30",
+    "title": "Asociar el operador al job",
+    "lang": "sql",
+    "code": "USE msdb;\nIF NOT EXISTS (SELECT 1 FROM dbo.sysoperators WHERE name = N'operador_NotasLab05')\n    EXEC dbo.sp_add_operator\n        @name = N'operador_NotasLab05',\n        @email_address = N'operador@notaslab05.local';\nEXEC dbo.sp_update_job\n    @job_name = N'Respaldo diario NotasLab05',\n    @notify_level_email = 2,\n    @notify_email_operator_name = N'operador_NotasLab05';\nSELECT j.name AS trabajo, j.notify_level_email, o.name AS operador\nFROM dbo.sysjobs AS j\nJOIN dbo.sysoperators AS o ON o.id = j.notify_email_operator_id\nWHERE j.name = N'Respaldo diario NotasLab05';",
+    "output": [],
+    "columns": [
+      "trabajo",
+      "notify_level_email",
+      "operador"
+    ],
+    "rows": [
+      [
+        "Respaldo diario NotasLab05",
+        2,
+        "operador_NotasLab05"
+      ]
+    ],
+    "note": null
+  },
+  {
+    "id": "31",
+    "title": "Eliminar los objetos del ejemplo",
+    "lang": "sql",
+    "code": "-- LIMPIEZA OPCIONAL\nUSE msdb;\nIF EXISTS (SELECT 1 FROM dbo.sysjobs WHERE name = N'Respaldo diario NotasLab05')\n    EXEC dbo.sp_delete_job @job_name = N'Respaldo diario NotasLab05', @delete_unused_schedule = 1;\nIF EXISTS (SELECT 1 FROM dbo.sysoperators WHERE name = N'operador_NotasLab05')\n    EXEC dbo.sp_delete_operator @name = N'operador_NotasLab05';\nEXEC dbo.sp_delete_database_backuphistory @database_name = N'NotasLab05';\nUSE master;\nIF DB_ID(N'NotasLab05') IS NOT NULL DROP DATABASE NotasLab05;\nSELECT DB_ID(N'NotasLab05') AS base_existente;",
+    "output": [],
+    "columns": [
+      "base_existente"
+    ],
+    "rows": [
+      [
+        "NULL"
+      ]
+    ],
+    "note": null
+  },
+  {
+    "id": "32",
+    "title": "Eliminar los archivos del ejemplo",
+    "lang": "powershell",
+    "code": "docker exec sqlserver-2025 rm -f /backup/NotasLab05/NotasLab05_full.bak /backup/NotasLab05/NotasLab05_diff.bak /backup/NotasLab05/NotasLab05_log.trn /backup/NotasLab05/NotasLab05_job.bak /backup/NotasLab05/calificacion.dat /backup/NotasLab05/notas.csv\ndocker exec sqlserver-2025 rmdir /backup/NotasLab05",
+    "output": [],
+    "columns": null,
+    "rows": null,
+    "note": "Estos comandos normalmente no muestran texto cuando terminan correctamente."
+  }
+]
